@@ -159,4 +159,9 @@ config.local.json
 # FIREBASE DEVELOPMENT FILES
 # =================================================================
 driverapp/FIREBASE_PROJECT_CONFIG.md
-driverapp/FIREBASE_SETUP_GUIDE.md 
+driverapp/FIREBASE_SETUP_GUIDE.md
+
+# =================================================================
+# DEVELOPMENT FILES
+# =================================================================
+TODO_REPOSITORY_SETUP.md 
