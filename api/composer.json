@@ -1,6 +1,6 @@
 {
-    "name": "connex/api",
-    "description": "Backend API for Connex2 project.",
+    "name": "/api",
+    "description": "Backend API for project.",
     "type": "project",
     "require": {
         "php": ">=7.4",

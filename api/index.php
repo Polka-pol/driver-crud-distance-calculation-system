@@ -47,7 +47,7 @@ use App\Core\Auth;
 // Set common headers for the API response.
 $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '*';
 // Allow specific origins for production, all for development
-if (in_array($origin, ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://connex.team']) || $_ENV['APP_ENV'] === 'development') {
+if (in_array($origin, ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://your-domain.com']) || $_ENV['APP_ENV'] === 'development') {
     header("Access-Control-Allow-Origin: $origin");
 } else {
     header("Access-Control-Allow-Origin: *");
