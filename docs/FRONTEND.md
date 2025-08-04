@@ -61,6 +61,12 @@ cp env.example .env
 # Edit .env with your configuration
 ```
 
+4. **Configure API connection**
+```bash
+cp src/config.example.js src/config.js
+# Edit src/config.js with your actual API URL
+```
+
 4. **Start development server**
 ```bash
 npm start
@@ -96,6 +102,16 @@ REACT_APP_ENABLE_REAL_TIME_UPDATES=true
 ### API Configuration
 
 The frontend communicates with the backend API through the `config.js` file:
+
+**Important:** The `config.js` file contains sensitive API URLs and should never be committed to version control. Use `config.example.js` as a template.
+
+```bash
+# Copy the example configuration
+cp src/config.example.js src/config.js
+
+# Edit config.js with your actual API URL
+# Replace 'https://your-api-domain.com/api' with your real backend URL
+```
 
 ```javascript
 // src/config.js
