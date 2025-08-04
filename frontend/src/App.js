@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import './App.css';
+import './styles/modalScrollLock.css';
 import { calculateDistancesForDrivers } from './utils/distanceCalculator';
 import SearchBar from './components/SearchBar';
 import AddressSearchBar from './components/AddressSearchBar';
 import TruckTable from './components/TruckTable';
 import EditModal from './components/EditModal';
 import NewDriverModal from './components/NewDriverModal';
+import LocationHistoryModal from './components/LocationHistoryModal';
 import Pagination from './components/Pagination';
 import LoginPage from './components/LoginPage';
 import AdminPage from './components/AdminPage';
@@ -44,6 +46,12 @@ function App() {
   const [showNewDriverModal, setShowNewDriverModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [originalTruck, setOriginalTruck] = useState(null); // Track original data for comparison
+  const [locationHistoryModal, setLocationHistoryModal] = useState({
+    isOpen: false,
+    truckId: null,
+    truckNumber: null,
+    driverName: null
+  });
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
@@ -306,6 +314,24 @@ function App() {
     setTrucks(prevTrucks => [newlyAddedTruck, ...prevTrucks]);
     // Optionally, you can sort or go to the first page here
     handleReset(); // To clear filters and show the new driver
+  };
+
+  const handleLocationClick = (truck) => {
+    setLocationHistoryModal({
+      isOpen: true,
+      truckId: truck.id,
+      truckNumber: truck.truck_no,
+      driverName: truck.driver_name
+    });
+  };
+
+  const handleLocationHistoryClose = () => {
+    setLocationHistoryModal({
+      isOpen: false,
+      truckId: null,
+      truckNumber: null,
+      driverName: null
+    });
   };
 
   const handleEditChange = (field, value) => {
@@ -604,6 +630,7 @@ function App() {
                   onSelectAll={handleSelectAllTrucks}
               onRefresh={handleManualRefresh}
               isRefreshing={isRefreshing}
+              onLocationClick={handleLocationClick}
             />
 
             <Pagination
@@ -617,7 +644,10 @@ function App() {
 
         {modalComment !== null && (
           <div className="modal-overlay" onClick={() => setModalComment(null)}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-content" onClick={e => {
+              if (e && e.stopPropagation) e.stopPropagation();
+              if (e && e.preventDefault) e.preventDefault();
+            }}>
               <h2>Comment</h2>
               <div className="comment-text">{modalComment}</div>
               <button className="reset-btn" onClick={() => setModalComment(null)}>Close</button>
@@ -645,6 +675,16 @@ function App() {
             user={user}
             onClose={() => setShowNewDriverModal(false)}
             onDriverAdded={handleAddNewDriver}
+          />
+        )}
+
+        {locationHistoryModal.isOpen && (
+          <LocationHistoryModal
+            isOpen={locationHistoryModal.isOpen}
+            onClose={handleLocationHistoryClose}
+            truckId={locationHistoryModal.truckId}
+            truckNumber={locationHistoryModal.truckNumber}
+            driverName={locationHistoryModal.driverName}
           />
         )}
           </>

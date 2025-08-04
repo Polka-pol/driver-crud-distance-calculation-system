@@ -553,6 +553,14 @@ class DashboardController
                 $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
                 return "Deleted truck {$truckDisplay}";
                 
+            case 'truck_location_changed':
+                $truckId = $details['truck_id'] ?? 'Unknown';
+                $truckNumber = $details['truck_number'] ?? 'unknown';
+                $oldLocation = $details['old_location'] ?? 'Unknown location';
+                $newLocation = $details['new_location'] ?? 'Unknown location';
+                $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
+                return "🚚 Truck {$truckDisplay} location changed: {$oldLocation} → {$newLocation}";
+                
             case 'user_created':
                 $username = $details['username'] ?? 'Unknown';
                 return "Created new user: {$username}";

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
@@ -41,6 +41,20 @@ const EditModal = ({
 }) => {
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
 
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (editedTruck) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [editedTruck]);
+
   // Phone number formatting function
   const formatPhoneNumber = (value) => {
     // Remove all non-digit characters
@@ -67,8 +81,11 @@ const EditModal = ({
   if (!editedTruck) return null;
 
   return (
-    <div className="modal-overlay" onMouseDown={onClose}>
-      <div className="edit-modal-content" onMouseDown={e => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="edit-modal-content" onClick={e => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (e && e.preventDefault) e.preventDefault();
+      }}>
         <div className="modal-header">
           <h2>Edit Driver Information</h2>
           

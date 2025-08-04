@@ -59,6 +59,8 @@ const ActivityDashboard = () => {
                 return '➕';
             case 'truck_deleted':
                 return '🗑️';
+            case 'truck_location_changed':
+                return '📍';
             case 'user_login_success':
                 return '🔐';
             case 'statistics_reset':

@@ -139,6 +139,14 @@ class TruckController
             }
 
             $pdo = Database::getConnection();
+            
+            // Get current truck data BEFORE update for location change detection
+            $currentTruckStmt = $pdo->prepare("SELECT TruckNumber, CityStateZip FROM Trucks WHERE ID = :ID");
+            $currentTruckStmt->execute(['ID' => $id]);
+            $currentTruckData = $currentTruckStmt->fetch(PDO::FETCH_ASSOC);
+            $oldLocation = $currentTruckData['CityStateZip'] ?? null;
+            $truckNumber = $currentTruckData['TruckNumber'] ?? 'unknown';
+            
             $sql = "UPDATE Trucks SET " . implode(', ', $updateFields) . " WHERE ID = :ID";
             
             // Log what fields are being updated
@@ -157,11 +165,30 @@ class TruckController
                     return !in_array($field, ['ID', 'updated_by']);
                 });
                 
-                // Get current truck number from database for logging
-                $truckNumberStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
-                $truckNumberStmt->execute(['ID' => $id]);
-                $truckData = $truckNumberStmt->fetch(PDO::FETCH_ASSOC);
-                $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
+                // Check if location was changed and log it
+                if (isset($data['city_state_zip'])) {
+                    $newLocation = $data['city_state_zip'];
+                    
+                    // Debug logging
+                    Logger::info('Location change check', [
+                        'truck_id' => $id,
+                        'old_location' => $oldLocation,
+                        'new_location' => $newLocation,
+                        'locations_different' => $oldLocation !== $newLocation,
+                        'old_location_not_null' => $oldLocation !== null
+                    ]);
+                    
+                    // Only log if location actually changed
+                    if ($oldLocation !== $newLocation && $oldLocation !== null) {
+                        Logger::info('Logging location change', [
+                            'truck_id' => $id,
+                            'truck_number' => $truckNumber,
+                            'old_location' => $oldLocation,
+                            'new_location' => $newLocation
+                        ]);
+                        self::logLocationChange($pdo, $id, $truckNumber, $oldLocation, $newLocation, $userData);
+                    }
+                }
                 
                 ActivityLogger::log('truck_updated', [
                     'truck_id' => $id, 
@@ -379,6 +406,148 @@ class TruckController
             } else {
                 self::sendResponse(['success' => false, 'message' => 'Database error during creation.'], 500);
             }
+        }
+    }
+    
+    /**
+     * Log location change to truck_location_history table
+     */
+    private static function logLocationChange($pdo, $truckId, $truckNumber, $oldLocation, $newLocation, $userData)
+    {
+        try {
+            $sql = "INSERT INTO truck_location_history (
+                        truck_id, truck_number, old_location, new_location, 
+                        changed_by_user_id, changed_by_username, created_at
+                    ) VALUES (
+                        :truck_id, :truck_number, :old_location, :new_location,
+                        :changed_by_user_id, :changed_by_username, NOW()
+                    )";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                ':truck_id' => $truckId,
+                ':truck_number' => $truckNumber,
+                ':old_location' => $oldLocation,
+                ':new_location' => $newLocation,
+                ':changed_by_user_id' => $userData ? ($userData->id ?? null) : null,
+                ':changed_by_username' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User'
+            ]);
+            
+            // Also log to activity_logs for dashboard
+            ActivityLogger::log('truck_location_changed', [
+                'truck_id' => $truckId,
+                'truck_number' => $truckNumber,
+                'old_location' => $oldLocation,
+                'new_location' => $newLocation
+            ]);
+            
+            Logger::info('Location change logged', [
+                'truck_id' => $truckId,
+                'truck_number' => $truckNumber,
+                'old_location' => $oldLocation,
+                'new_location' => $newLocation
+            ]);
+            
+        } catch (PDOException $e) {
+            Logger::error('Failed to log location change', [
+                'error' => $e->getMessage(),
+                'truck_id' => $truckId
+            ]);
+        }
+    }
+
+    /**
+     * Get location history for a truck with pagination
+     */
+    public static function getLocationHistory($truckId, $page = 1, $limit = 10)
+    {
+        try {
+            $pdo = Database::getConnection();
+            
+            // Validate truck exists
+            $truckStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
+            $truckStmt->execute(['ID' => $truckId]);
+            $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$truckData) {
+                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                return;
+            }
+            
+            $offset = ($page - 1) * $limit;
+            
+            // Get location history with pagination
+            $sql = "SELECT 
+                        id, truck_id, truck_number, old_location, new_location,
+                        changed_by_user_id, changed_by_username, created_at
+                    FROM truck_location_history 
+                    WHERE truck_id = :truck_id 
+                    ORDER BY created_at DESC 
+                    LIMIT :limit OFFSET :offset";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindValue(':truck_id', $truckId, PDO::PARAM_INT);
+            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Get total count for pagination
+            $countStmt = $pdo->prepare("SELECT COUNT(*) as total FROM truck_location_history WHERE truck_id = :truck_id");
+            $countStmt->execute(['truck_id' => $truckId]);
+            $countData = $countStmt->fetch(PDO::FETCH_ASSOC);
+            $total = $countData['total'];
+            
+            $totalPages = ceil($total / $limit);
+            
+            self::sendResponse([
+                'success' => true,
+                'data' => $history,
+                'pagination' => [
+                    'current_page' => $page,
+                    'total_pages' => $totalPages,
+                    'total_records' => $total,
+                    'per_page' => $limit
+                ],
+                'truck' => [
+                    'id' => $truckId,
+                    'truck_number' => $truckData['TruckNumber']
+                ]
+            ]);
+            
+        } catch (PDOException $e) {
+            Logger::error('Failed to get location history', [
+                'error' => $e->getMessage(),
+                'truck_id' => $truckId
+            ]);
+            self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
+        }
+    }
+    
+    /**
+     * Get location history count for a truck
+     */
+    public static function getLocationHistoryCount($truckId)
+    {
+        try {
+            $pdo = Database::getConnection();
+            
+            $countStmt = $pdo->prepare("SELECT COUNT(*) as total FROM truck_location_history WHERE truck_id = :truck_id");
+            $countStmt->execute(['truck_id' => $truckId]);
+            $countData = $countStmt->fetch(PDO::FETCH_ASSOC);
+            
+            self::sendResponse([
+                'success' => true,
+                'count' => $countData['total']
+            ]);
+            
+        } catch (PDOException $e) {
+            Logger::error('Failed to get location history count', [
+                'error' => $e->getMessage(),
+                'truck_id' => $truckId
+            ]);
+            self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
         }
     }
 } 

@@ -197,6 +197,22 @@ if ($apiRoute === '/trucks/map' && $requestMethod === 'GET') {
     exit();
 }
 
+// Route for getting truck location history
+if (preg_match('/^\/trucks\/(\d+)\/location-history$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+    $truckId = (int)$matches[1];
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    TruckController::getLocationHistory($truckId);
+    exit();
+}
+
+// Route for getting truck location history count
+if (preg_match('/^\/trucks\/(\d+)\/location-history\/count$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+    $truckId = (int)$matches[1];
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    TruckController::getLocationHistoryCount($truckId);
+    exit();
+}
+
 // Route for the new smart search
 if ($apiRoute === '/search' && $requestMethod === 'GET') {
     // Allow all authenticated users to use address search (no role restriction)

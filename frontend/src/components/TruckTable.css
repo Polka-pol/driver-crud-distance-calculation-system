@@ -180,6 +180,16 @@
   text-align: center;
 }
 
+.styled-table td.col-city.location-clickable {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.styled-table td.col-city.location-clickable:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
 .styled-table td.col-dimensions {
   white-space: normal;
   word-wrap: break-word;

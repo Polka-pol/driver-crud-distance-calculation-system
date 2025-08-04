@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
@@ -49,6 +49,16 @@ const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
   });
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    document.body.classList.add('modal-open');
+
+    // Cleanup on unmount
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, []);
 
   // Phone number formatting function
   const formatPhoneNumber = (value) => {
@@ -116,8 +126,11 @@ const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
   };
 
   return (
-    <div className="modal-overlay" onMouseDown={onClose}>
-      <div className="new-driver-modal-content" onMouseDown={e => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="new-driver-modal-content" onClick={e => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (e && e.preventDefault) e.preventDefault();
+      }}>
         <h2>Add New Driver</h2>
         <form onSubmit={handleSubmit} className="new-driver-form">
           {error && <div className="form-error-message">{error}</div>}

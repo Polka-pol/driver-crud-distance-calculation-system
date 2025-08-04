@@ -17,7 +17,8 @@ const TruckTable = ({
   onSelectTruck,
   onSelectAll,
   onRefresh,
-  isRefreshing
+  isRefreshing,
+  onLocationClick
 }) => {
   const [isUpdated, setIsUpdated] = useState(false);
   const [expandedCards, setExpandedCards] = useState(new Set());
@@ -183,11 +184,11 @@ const TruckTable = ({
               type="checkbox"
               checked={selectedTrucks.includes(truck.id)}
               onChange={(e) => {
-                e.stopPropagation();
+                if (e && e.stopPropagation) e.stopPropagation();
                 onSelectTruck(truck.id);
               }}
               onClick={(e) => {
-                e.stopPropagation();
+                if (e && e.stopPropagation) e.stopPropagation();
               }}
               className="mobile-card-checkbox"
             />
@@ -204,7 +205,7 @@ const TruckTable = ({
               status={truck.status} 
               truck={truck} 
               onClick={(e) => {
-                e.stopPropagation();
+                if (e && e.stopPropagation) e.stopPropagation();
                 onEdit(truck);
               }} 
             />
@@ -399,7 +400,14 @@ const TruckTable = ({
               <td className="col-driver">{truck.driver_name}</td>
               <td className="col-contact">{truck.contactphone}</td>
               <td className="col-cell">{truck.cell_phone}</td>
-              <td className="col-city">{truck.city_state_zip}</td>
+              <td 
+                className="col-city location-clickable" 
+                onClick={() => onLocationClick && onLocationClick(truck)}
+                style={{ cursor: onLocationClick ? 'pointer' : 'default' }}
+                title={onLocationClick ? "Click to view location history" : ""}
+              >
+                {truck.city_state_zip}
+              </td>
               {distances[truck.id] ? (
                 <DistanceCell distanceData={distances[truck.id]} />
               ) : (
