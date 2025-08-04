@@ -6,7 +6,10 @@ A comprehensive logistics management platform connecting dispatchers with truck 
 
 I'm actively seeking new opportunities in software development. This project demonstrates my skills in full-stack development, API design, and mobile application development. 
 
-**Live Demo:** https://homin.events/test20
+**Live Demo:** https://homin.events/test20  
+**Demo Login:** admin / admin
+
+**Production Experience:** This system has been successfully deployed and is currently running in a real logistics company for over 2 months, handling actual business operations and real data.
 
 Feel free to reach out for collaboration or job opportunities!
 
@@ -63,6 +66,12 @@ driver-crud-distance-calculation-system/
 
 ### Live Demo
 You can view a working demo of the application at: **https://homin.events/test20**
+
+**Demo Credentials:**
+- **Username:** `admin`
+- **Password:** `admin`
+
+**Note:** The demo contains fake data for demonstration purposes. The actual production system has been running in a real company for over 2 months with real business data.
 
 ### Prerequisites
 - PHP 8.0+
@@ -168,8 +177,11 @@ This project showcases:
 - **Mobile app development** for cross-platform solutions
 - **Project documentation** and best practices
 - **Version control** and collaborative development
+- **Production deployment** and real-world business application
 
 **Technologies demonstrated:** PHP, MySQL, React, React Native, JavaScript, TypeScript, Git, REST APIs, JWT Authentication, Mapbox Integration
+
+**Real-world Impact:** Successfully deployed and operational in a logistics company for 2+ months, demonstrating practical business value and production readiness.
 
 ## 📞 Support
 
