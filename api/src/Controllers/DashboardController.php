@@ -48,7 +48,7 @@ class DashboardController
             }
 
             // =========================================================
-            // 2. Weekly Activity Statistics (Optimized)
+            // 2. All-Time Activity Statistics (Optimized)
             // Use distance_log for cache/mapbox stats, activity_logs only for user queries
             // =========================================================
             $sevenDaysAgo = date('Y-m-d H:i:s', strtotime('-7 days'));
@@ -64,16 +64,14 @@ class DashboardController
             $activityCountsStmt->execute([$sevenDaysAgo]);
             $activityCounts = $activityCountsStmt->fetch(PDO::FETCH_ASSOC);
             
-            // Get cache/mapbox statistics from distance_log table
-            $distanceStatsStmt = $pdo->prepare("
+            // Get cache/mapbox statistics from distance_log table for all time
+            $distanceStatsStmt = $pdo->query("
                 SELECT 
                     SUM(total_origins) as total_origins_checked,
                     SUM(cache_hits) as cache_hits,
                     SUM(mapbox_requests) as mapbox_requests
                 FROM distance_log 
-                WHERE created_at >= ?
             ");
-            $distanceStatsStmt->execute([$sevenDaysAgo]);
             $distanceStats = $distanceStatsStmt->fetch(PDO::FETCH_ASSOC);
             
             $distanceCalcsCount = (int)$activityCounts['distance_calcs_count'];
