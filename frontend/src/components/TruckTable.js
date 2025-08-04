@@ -18,9 +18,9 @@ const TruckTable = ({
   onSelectAll,
   onRefresh,
   isRefreshing,
+  isUpdated,
   onLocationClick
 }) => {
-  const [isUpdated, setIsUpdated] = useState(false);
   const [expandedCards, setExpandedCards] = useState(new Set());
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
@@ -153,12 +153,6 @@ const TruckTable = ({
 
   const handleRefreshClick = () => {
     onRefresh();
-    setIsUpdated(true);
-    
-    // Reset the button state after 5 seconds
-    setTimeout(() => {
-      setIsUpdated(false);
-    }, 5000);
   };
 
   const isAllSelectedOnPage = trucks.length > 0 && trucks.every(truck => selectedTrucks.includes(truck.id));

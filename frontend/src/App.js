@@ -45,6 +45,7 @@ function App() {
   const [showSlowMessage, setShowSlowMessage] = useState(false);
   const [showNewDriverModal, setShowNewDriverModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isUpdated, setIsUpdated] = useState(false);
   const [originalTruck, setOriginalTruck] = useState(null); // Track original data for comparison
   const [locationHistoryModal, setLocationHistoryModal] = useState({
     isOpen: false,
@@ -75,6 +76,12 @@ function App() {
       setTrucks(data);
       setDistances({}); // Clear all calculated distances
       setError(null); // Clear any previous errors
+      
+      // Set updated state to show visual feedback
+      setIsUpdated(true);
+      setTimeout(() => {
+        setIsUpdated(false);
+      }, 5000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -379,9 +386,11 @@ function App() {
   const handleCalculate = async () => {
     if (!searchQuery) return;
     
+    // Refresh table data before starting calculation
+    await handleManualRefresh();
+    
     setIsCalculating(true);
     setShowSlowMessage(false); // Reset on new calculation
-    setDistances({});
     setSortConfig({ field: 'distance', direction: 'asc' });
     setError(null);
 
@@ -630,6 +639,7 @@ function App() {
                   onSelectAll={handleSelectAllTrucks}
               onRefresh={handleManualRefresh}
               isRefreshing={isRefreshing}
+              isUpdated={isUpdated}
               onLocationClick={handleLocationClick}
             />
 
