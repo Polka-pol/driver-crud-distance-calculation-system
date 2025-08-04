@@ -4,7 +4,11 @@ A comprehensive logistics management platform connecting dispatchers with truck 
 
 ## 👨‍💻 About the Developer
 
-I'm actively seeking new opportunities in software development. This project demonstrates my skills in full-stack development, API design, and mobile application development. Feel free to reach out for collaboration or job opportunities!
+I'm actively seeking new opportunities in software development. This project demonstrates my skills in full-stack development, API design, and mobile application development. 
+
+**Live Demo:** https://homin.events/test20
+
+Feel free to reach out for collaboration or job opportunities!
 
 ## 🚀 Overview
 
@@ -56,6 +60,9 @@ driver-crud-distance-calculation-system/
 - **HTTP API** - Communication with backend
 
 ## 🚀 Quick Start
+
+### Live Demo
+You can view a working demo of the application at: **https://homin.events/test20**
 
 ### Prerequisites
 - PHP 8.0+
