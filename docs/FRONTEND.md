@@ -1,8 +1,8 @@
-# Frontend Documentation
+# Driver CRUD Distance Calculation System - Frontend Documentation
 
 ## Overview
 
-The Connex Driver Platform Frontend is a React-based web application that provides dispatchers with a comprehensive dashboard for managing loads, drivers, and real-time communication.
+The Driver CRUD Distance Calculation System Frontend is a React-based web application that provides dispatchers with a comprehensive dashboard for managing loads, drivers, and real-time communication.
 
 ## Technology Stack
 

@@ -1,10 +1,14 @@
-# Connex Driver Platform
+# Driver CRUD Distance Calculation System
 
-A comprehensive logistics management platform connecting dispatchers with truck drivers through real-time communication, load management, and location tracking.
+A comprehensive logistics management platform connecting dispatchers with truck drivers through real-time communication, load management, and location tracking. This project was developed with assistance from Cursor AI and is part of my portfolio for LinkedIn.
+
+## 👨‍💻 About the Developer
+
+I'm actively seeking new opportunities in software development. This project demonstrates my skills in full-stack development, API design, and mobile application development. Feel free to reach out for collaboration or job opportunities!
 
 ## 🚀 Overview
 
-Connex Driver Platform is a full-stack application consisting of:
+Driver Platform is a full-stack application consisting of:
 - **Backend API** (PHP) - RESTful API for data management and business logic
 - **Frontend Web App** (React) - Dispatcher dashboard for load management
 - **Mobile App** (React Native) - Driver application for real-time updates
@@ -12,7 +16,7 @@ Connex Driver Platform is a full-stack application consisting of:
 ## 📁 Project Structure
 
 ```
-connex-driver-platform/
+driver-crud-distance-calculation-system/
 ├── api/                    # PHP Backend API
 │   ├── src/               # Source code
 │   ├── config/            # Configuration files
@@ -146,7 +150,19 @@ See [Security Guidelines](SECURITY_GUIDELINES.md) for detailed information.
 
 ## 📄 License
 
-This project is proprietary software. All rights reserved.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🎯 Portfolio Project
+
+This project showcases:
+- **Full-stack development** with PHP, React, and React Native
+- **API design and implementation** with RESTful endpoints
+- **Database design** and optimization
+- **Mobile app development** for cross-platform solutions
+- **Project documentation** and best practices
+- **Version control** and collaborative development
+
+**Technologies demonstrated:** PHP, MySQL, React, React Native, JavaScript, TypeScript, Git, REST APIs, JWT Authentication, Mapbox Integration
 
 ## 📞 Support
 

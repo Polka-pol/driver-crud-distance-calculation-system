@@ -1,8 +1,8 @@
-# Mobile App Documentation
+# Driver CRUD Distance Calculation System - Mobile App Documentation
 
 ## Overview
 
-The Connex Driver Platform Mobile App is a React Native application that enables truck drivers to receive real-time load offers, communicate with dispatchers, and manage their delivery operations.
+The Driver CRUD Distance Calculation System Mobile App is a React Native application that enables truck drivers to receive real-time load offers, communicate with dispatchers, and manage their delivery operations.
 
 ## Technology Stack
 

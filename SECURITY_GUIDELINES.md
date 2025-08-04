@@ -1,8 +1,8 @@
-# Security Guidelines for Connex Driver Platform
+# Security Guidelines for Driver CRUD Distance Calculation System
 
 ## 🚨 CRITICAL SECURITY NOTICE
 
-This document outlines security best practices for the Connex Driver Platform project. **NEVER commit sensitive information to version control.**
+This document outlines security best practices for the Driver CRUD Distance Calculation System project. **NEVER commit sensitive information to version control.**
 
 ## 🔐 Environment Variables
 

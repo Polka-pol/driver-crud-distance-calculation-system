@@ -4,7 +4,7 @@
 
 **⚠️ NOTE: Firebase integration is currently in development stage and not yet implemented in the production code.**
 
-This guide covers the planned Firebase setup for future real-time features, authentication, and push notifications.
+This guide covers the planned Firebase setup for future real-time features, authentication, and push notifications for the Driver CRUD Distance Calculation System.
 
 ## Firebase Services Used
 
@@ -20,8 +20,8 @@ This guide covers the planned Firebase setup for future real-time features, auth
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Click "Create a project"
 3. Enter project details:
-   - **Project name**: `Connex Driver Platform`
-   - **Project ID**: `connex-driver-platform`
+   - **Project name**: `Driver CRUD Distance Calculation System`
+   - **Project ID**: `driver-crud-distance-calculation-system`
    - **Google Analytics**: Enable (recommended)
 
 ### 2. Enable Required Services
