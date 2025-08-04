@@ -1,0 +1,34 @@
+# Apache URL Rewriting
+# This file directs all incoming requests to the index.php file,
+# which acts as the front controller for the API.
+
+# Enable the rewrite engine
+RewriteEngine On
+
+# Redirect Trailing Slashes If Not A Folder...
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)/$ /$1 [L,R=301]
+
+# Handle Front Controller...
+# Rewrite all requests to the index.php file
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.php [L]
+
+# Handle Authorization Header
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Block access to sensitive files
+<Files ".env">
+    Order allow,deny
+    Deny from all
+</Files>
+<Files "composer.json">
+    Order allow,deny
+    Deny from all
+</Files>
+<Files "composer.lock">
+    Order allow,deny
+    Deny from all
+</Files> 

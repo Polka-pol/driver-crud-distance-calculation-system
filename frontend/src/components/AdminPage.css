@@ -1,0 +1,256 @@
+/* General layout for the admin page */
+.admin-page-layout {
+    display: flex;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    min-height: 70vh; /* Ensure it takes up a good portion of the screen height */
+    overflow: hidden; /* Contains the border radius */
+    position: relative;
+}
+
+/* Mobile menu toggle button - hidden by default */
+.mobile-menu-toggle {
+    display: none;
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 999;
+    background-color: #0d6efd;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.mobile-menu-toggle:hover {
+    background-color: #0b5ed7;
+}
+
+/* Hamburger icon */
+.hamburger {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.hamburger span {
+    width: 20px;
+    height: 2px;
+    background-color: white;
+    transition: all 0.3s ease;
+    border-radius: 1px;
+}
+
+.hamburger.open span:nth-child(1) {
+    transform: rotate(45deg) translate(6px, 6px);
+}
+
+.hamburger.open span:nth-child(2) {
+    opacity: 0;
+}
+
+.hamburger.open span:nth-child(3) {
+    transform: rotate(-45deg) translate(6px, -6px);
+}
+
+.menu-text {
+    font-size: 14px;
+}
+
+/* Mobile overlay */
+.mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+}
+
+/* Sidebar styles */
+.admin-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 240px;
+    background-color: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+    padding: 20px 15px;
+}
+
+.admin-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.admin-sidebar-header h3 {
+    margin: 0;
+    padding: 0 10px;
+    color: #343a40;
+    font-size: 1.2rem;
+}
+
+/* Mobile close button - hidden by default */
+.mobile-close {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 5px;
+    line-height: 1;
+}
+
+.mobile-close:hover {
+    color: #343a40;
+}
+
+.admin-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-grow: 1; /* Pushes the footer to the bottom */
+}
+
+.admin-menu li {
+    padding: 12px 15px;
+    cursor: pointer;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    color: #495057;
+    font-weight: 500;
+    transition: background-color 0.2s, color 0.2s;
+    user-select: none;
+}
+
+.admin-menu li:hover {
+    background-color: #e9ecef;
+}
+
+.admin-menu li.active {
+    background-color: #0d6efd; /* A modern blue */
+    color: white;
+}
+
+.admin-content-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Main content area styles */
+.admin-main-content {
+    background-color: #fff;
+    flex-grow: 1;
+    padding: 20px 30px 30px 30px;
+}
+
+.admin-main-content h3 {
+    margin-top: 0;
+    color: #343a40;
+}
+
+/* Mobile Responsive Design */
+@media (max-width: 768px) {
+    .admin-page-layout {
+        border-radius: 0;
+        min-height: 100vh;
+    }
+
+    /* Show mobile menu toggle */
+    .mobile-menu-toggle {
+        display: flex;
+    }
+
+    /* Hide menu button when sidebar is open */
+    body.mobile-menu-open .mobile-menu-toggle {
+        opacity: 0;
+        pointer-events: none;
+        transform: scale(0.8);
+    }
+
+    /* Show mobile overlay when menu is open */
+    .mobile-overlay {
+        display: block;
+    }
+
+    /* Hide sidebar by default on mobile */
+    .admin-sidebar {
+        position: fixed;
+        top: 0;
+        left: -280px;
+        height: 100vh;
+        width: 260px;
+        z-index: 1000;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Show sidebar when mobile menu is open */
+    .admin-sidebar.mobile-open {
+        left: 0;
+    }
+
+    /* Show mobile close button */
+    .mobile-close {
+        display: block;
+    }
+
+    /* Adjust main content for mobile */
+    .admin-main-content {
+        width: 100%;
+        padding: 60px 15px 20px 15px;
+    }
+
+    /* Make content header responsive */
+    .admin-content-header {
+        margin-bottom: 15px;
+        padding-bottom: 8px;
+        justify-content: center;
+    }
+}
+
+/* Tablet responsive design */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .admin-sidebar {
+        width: 200px;
+    }
+
+    .admin-main-content {
+        padding: 20px 25px 25px 25px;
+    }
+
+    .admin-sidebar-header h3 {
+        font-size: 1.1rem;
+    }
+
+    .admin-menu li {
+        padding: 10px 12px;
+        font-size: 0.95rem;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .admin-main-content {
+        padding: 55px 10px 15px 10px;
+    }
+
+    .admin-content-header {
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+    }
+}

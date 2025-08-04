@@ -1,0 +1,7 @@
+/* ===== SESSION MANAGEMENT SPECIFIC STYLES ===== */
+/* Only unique styles for session management that are not covered in AdminPanel.css */
+
+/* Additional style for session duration color */
+.session-duration {
+    color: #6b7280;
+} 

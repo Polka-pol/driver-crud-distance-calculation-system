@@ -1,0 +1,1178 @@
+/* ============================
+   GLOBAL BACK BUTTON STYLE
+   ============================ */
+
+.back-btn {
+    background-color: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.back-btn:hover {
+    background-color: #e2e8f0;
+    color: #334155;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.back-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive styles for back button */
+@media (max-width: 768px) {
+    .back-btn {
+        width: auto;
+        min-width: 120px;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .back-btn {
+        padding: 10px 14px;
+        font-size: 13px;
+        width: 100%;
+    }
+}
+
+/* ============================
+   END GLOBAL BACK BUTTON STYLE
+   ============================ */
+
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-bg {
+  background: #f8fafc;
+  min-height: 100vh;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 24px;
+}
+
+h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #002801;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* SearchBar styles are now in SearchBar.css */
+
+/* Table styles moved to TruckTable.css */
+
+
+
+/* Comment preview styles moved to TruckTable.css */
+
+/* Pagination styles moved to Pagination.css */
+
+/* Email button styles moved to TruckTable.css */
+
+@media (max-width: 1200px) {
+  .container {
+    padding: 20px;
+  }
+  
+  /* Table responsive styles moved to TruckTable.css */
+  
+/* Medium screen SearchBar styles are in SearchBar.css */
+}
+
+@media (max-width: 992px) {
+  .container {
+    padding: 16px;
+  }
+  
+  .full-width-search {
+    gap: 12px;
+  }
+  
+  /* Table responsive styles moved to TruckTable.css */
+}
+
+@media (max-width: 768px) {
+  .app-bg {
+    padding: 12px;
+  }
+  
+  .container {
+    padding: 16px;
+  }
+  
+  h1 {
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+  }
+  
+/* Mobile SearchBar styles are in SearchBar.css */
+  
+  .full-width-search {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  
+  .calculate-btn {
+    min-width: 100px;
+    height: 36px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  
+  /* Table mobile styles moved to TruckTable.css */
+  
+
+  
+  /* Pagination responsive styles moved to Pagination.css */
+}
+
+@media (max-width: 576px) {
+  .app-bg {
+    padding: 12px;
+  }
+  
+  .container {
+    padding: 12px;
+  }
+  
+  .full-width-search {
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-direction: column;
+  }
+  
+  .full-width-search .search-bar {
+    height: 38px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  
+/* Mobile button styles are in SearchBar.css */
+  
+  .calculate-btn {
+    width: 100%;
+    height: 34px;
+    padding: 6px 12px;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  
+  /* Table small screen styles moved to TruckTable.css */
+  
+
+  
+  /* Pagination small screen styles moved to Pagination.css */
+}
+
+@media (max-width: 400px) {
+  .container {
+    padding: 6px;
+  }
+  
+  h1 {
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+  }
+  
+/* Small screen SearchBar styles are in SearchBar.css */
+  
+  .full-width-search {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  
+  .full-width-search .search-bar {
+    height: 36px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  
+  .calculate-btn {
+    height: 32px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  /* Table very small screen styles moved to TruckTable.css */
+  
+
+}
+
+@media print {
+  .search-bar-group,
+  .modal-overlay,
+  .pagination {
+    display: none;
+  }
+  
+  /* Table print styles moved to TruckTable.css */
+}
+
+/* Base modal overlay - used by all modal components */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+/* Generic modal content - specific components override this */
+.modal-content {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.5rem;
+  color: #234;
+  border-bottom: 1px solid #e0e7ef;
+  padding-bottom: 12px;
+}
+
+.error-message {
+  background-color: #fee2e2;
+  color: #991b1b;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  border: 1px solid #fecaca;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.error-message::before {
+  content: "⚠️";
+}
+
+.rate-limit-message {
+  background-color: #fef3c7;
+  color: #92400e;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  border: 1px solid #fcd34d;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rate-limit-message::before {
+  content: "⏳";
+}
+
+/* All table column styles moved to TruckTable.css */
+
+.edit-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #f8fafc;
+  transition: border 0.2s;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.edit-input:focus {
+  border: 1.5px solid #2980b9;
+  outline: none;
+  background: #fff;
+}
+
+.edit-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+/* Edit modal content styles moved to EditModal.css */
+
+.edit-form {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-form-row {
+  margin-bottom: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-form-row.full-width {
+  grid-column: 1 / -1;
+}
+
+.edit-form-row label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+  color: #2d3a4a;
+  font-size: 0.85rem;
+}
+
+.edit-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #f8fafc;
+  transition: all 0.2s;
+  margin-bottom: 0;
+  box-sizing: border-box;
+}
+
+.edit-input:focus {
+  border-color: #2980b9;
+  outline: none;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.1);
+}
+
+.edit-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #f8fafc;
+  min-height: 80px;
+  resize: vertical;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.edit-textarea:focus {
+  border-color: #2980b9;
+  outline: none;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.1);
+}
+
+.edit-form-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+  grid-column: 1 / -1;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.edit-form-actions .left-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-form-actions .right-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.delete-btn {
+  padding: 8px 16px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.delete-btn:hover {
+  background: #c0392b;
+  transform: translateY(-1px);
+}
+
+.save-btn {
+  padding: 8px 16px;
+  background: #2980b9;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.save-btn:hover {
+  background: #1f6aa1;
+}
+
+.cancel-btn {
+  padding: 8px 16px;
+  background: #e2e8f0;
+  color: #2d3a4a;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.cancel-btn:hover {
+  background: #cbd5e0;
+}
+
+.now-btn {
+  padding: 8px 12px;
+  background: #f1f5f9;
+  color: #2d3a4a;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  margin-left: 8px;
+}
+
+.now-btn:hover {
+  background: #e2e8f0;
+}
+
+.date-picker-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.date-picker-container .react-datepicker-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.date-picker-container .edit-input {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .edit-form {
+    grid-template-columns: 1fr;
+    padding: 0;
+  }
+  
+  /* Edit modal responsive styles moved to EditModal.css */
+}
+
+/* SearchBar item full-width styles are in SearchBar.css */
+
+.calculate-btn {
+  background-color: #2980b9;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  height: 40px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
+}
+
+.calculate-btn:hover {
+  background-color: #2472a4;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(41, 128, 185, 0.2);
+}
+
+.calculate-btn:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.calculate-btn:disabled:hover {
+  background-color: #94a3b8;
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.slow-calculation-message {
+  margin-left: 15px;
+  font-style: italic;
+  color: #555;
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.full-width-search {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  align-items: center;
+}
+
+.full-width-search .search-bar {
+  flex: 1;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  background: white;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #475569;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #2980b9;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Address Autofill Styles */
+.active-suggestion {
+  background-color: #f5f5f5 !important;
+}
+
+/* Ensure suggestions appear above other elements */
+.full-width-search {
+  position: relative;
+}
+
+.edit-form-row {
+  position: relative;
+}
+
+/* Additional styles for the suggestions container */
+.suggestions-container div:last-child {
+  border-bottom: none;
+}
+
+.suggestions-container div:hover {
+  background-color: #f5f5f5;
+}
+
+.calculation-status {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.retry-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.progress-message {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+/* Floating Selection Overlay */
+.floating-selection-overlay {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+.floating-selection-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border: 1px solid #bbdefb;
+  border-radius: 12px;
+  color: #0d47a1;
+  font-weight: 500;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(8px);
+  min-width: 280px;
+  max-width: 320px;
+}
+
+.selection-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.selection-count {
+  background: #2196F3;
+  color: white;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.selection-text {
+  font-size: 0.95rem;
+}
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.floating-selection-menu .action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.floating-selection-menu .action-buttons .action-btn,
+.floating-selection-menu .action-buttons .reset-btn {
+  border: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+  max-width: 50%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.floating-selection-menu .action-buttons .action-btn {
+  background: linear-gradient(135deg, #2196F3, #1976d2);
+  color: white;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+}
+
+.floating-selection-menu .action-buttons .action-btn:hover {
+  background: linear-gradient(135deg, #1976d2, #1565c0);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+}
+
+.floating-selection-menu .action-buttons .reset-btn {
+  background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+  color: #666;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.floating-selection-menu .action-buttons .reset-btn:hover {
+  background: linear-gradient(135deg, #e8e8e8, #d8d8d8);
+  color: #444;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+
+
+/* Keep old styles for other action buttons that might exist elsewhere */
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.action-buttons .action-btn {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.action-buttons .action-btn:hover {
+  background-color: #1976d2;
+}
+
+.action-buttons .reset-btn {
+  background-color: #f1f1f1;
+  color: #333;
+  border: 1px solid #ddd;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.action-buttons .reset-btn:hover {
+  background-color: #e1e1e1;
+}
+
+/* SearchBar filters styling is in SearchBar.css */
+
+.table-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: 20px;
+}
+
+/* App Header */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.header-left {
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.user-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-right: 8px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.user-role {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: capitalize;
+  font-weight: 500;
+}
+
+.user-phone {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+  font-family: monospace;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Header Buttons */
+.header-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  min-height: 36px;
+}
+
+.new-driver-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  min-height: 36px;
+}
+
+.new-driver-btn:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-icon {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* admin-btn styles moved to AdminPanel.css to avoid conflicts */
+
+.map-btn {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+}
+
+.map-btn:hover {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.dispatcher-btn {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
+
+.dispatcher-btn:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.logout-btn {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.logout-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile Responsiveness for Floating Menu */
+@media (max-width: 768px) {
+  .floating-selection-overlay {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+  
+  .floating-selection-menu {
+    min-width: auto;
+    max-width: none;
+    padding: 12px 16px;
+  }
+  
+  .floating-selection-menu .action-buttons {
+    flex-direction: row;
+    gap: 8px;
+  }
+  
+  .floating-selection-menu .action-buttons .action-btn,
+  .floating-selection-menu .action-buttons .reset-btn {
+    padding: 12px 8px;
+    font-size: 0.8rem;
+    min-height: 44px;
+  }
+  
+
+}
+
+@media (max-width: 480px) {
+  .floating-selection-overlay {
+    top: 5px;
+    left: 5px;
+    right: 5px;
+  }
+  
+  .floating-selection-menu {
+    padding: 10px 12px;
+  }
+  
+  .selection-info {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .selection-count {
+    width: 24px;
+    height: 24px;
+    font-size: 0.8rem;
+  }
+  
+  .selection-text {
+    font-size: 0.85rem;
+  }
+  
+  .floating-selection-menu .action-buttons .action-btn,
+  .floating-selection-menu .action-buttons .reset-btn {
+    padding: 10px 6px;
+    font-size: 0.75rem;
+        min-height: 40px;
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+    padding: 12px 0;
+  }
+
+  .header-left {
+    text-align: center;
+  }
+
+  .app-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .header-right {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .user-welcome {
+    align-items: center;
+    margin-right: 0;
+  }
+
+  .header-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-btn,
+  .new-driver-btn {
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 576px) {
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .header-btn,
+  .new-driver-btn {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .btn-text {
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  .user-welcome {
+    display: none;
+  }
+
+  .header-right {
+    gap: 8px;
+  }
+}
+
+/* New Driver Modal */
+.new-driver-modal {
+  max-width: 400px;
+  text-align: center;
+}
+
+.new-driver-modal h2 {
+  color: #1e293b;
+  margin-bottom: 16px;
+  font-size: 1.25rem;
+}
+
+.new-driver-modal p {
+  color: #64748b;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* modal-actions admin-btn styles moved to AdminPanel.css to avoid conflicts */
+
+@media (max-width: 480px) {
+  .modal-actions {
+    flex-direction: column;
+  }
+  
+  .modal-actions .admin-btn,
+  .modal-actions .reset-btn {
+    width: 100%;
+  }
+}
+

@@ -1,0 +1,72 @@
+/* Modal overlay inherited from App.css */
+
+/* User modal specific content */
+.user-modal .modal-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 450px;
+}
+
+.user-modal .modal-content h2 {
+    margin-top: 0;
+    margin-bottom: 25px;
+    color: #343a40;
+}
+
+.user-modal .modal-content form label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #495057;
+}
+
+.user-modal .modal-content form input,
+.user-modal .modal-content form select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    box-sizing: border-box; /* Important for padding */
+}
+
+.user-modal .modal-content form input:focus,
+.user-modal .modal-content form select:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.user-modal .modal-content form input[disabled] {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
+
+.user-modal .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 25px;
+}
+
+.user-modal .modal-actions button {
+    padding: 10px 20px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    margin-left: 10px;
+}
+
+.user-modal .btn-cancel {
+    background-color: #6c757d;
+    color: white;
+}
+
+.user-modal .btn-save {
+    background-color: #0d6efd;
+    color: white;
+} 

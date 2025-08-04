@@ -1,0 +1,72 @@
+/* col-distance base styles are in TruckTable.css */
+.col-distance {
+  /* Add hardware acceleration for better performance */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.distance-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+  font-size: 0.7rem;
+  /* Optimize layout performance */
+  contain: layout style;
+  will-change: transform;
+}
+
+.distance-value {
+  font-weight: 500;
+  color: #2c5282;
+  font-size: 0.75rem;
+  /* Optimize text rendering */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.eta-value {
+  font-size: 0.65rem;
+  color: #4a5568;
+}
+
+.eta-value.calculating {
+  color: #718096;
+  font-style: italic;
+}
+
+/* Style for empty distance value */
+.distance-value:empty,
+.distance-value:only-child {
+  color: #718096;
+  font-style: italic;
+}
+
+.source-badge {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: white;
+  margin-top: 1px;
+  /* Add hardware acceleration */
+  transform: translateZ(0);
+  /* Optimize transitions */
+  transition: opacity 0.2s ease;
+}
+
+/* Pre-defined badge styles */
+.source-badge-cache {
+  background-color: #4CAF50 !important;
+}
+
+.source-badge-mapbox {
+  background-color: #2196F3 !important;
+}
+
+/* Optimize hover effects */
+.source-badge:hover {
+  opacity: 0.9;
+} 
