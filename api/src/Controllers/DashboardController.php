@@ -535,13 +535,23 @@ class DashboardController
                 
             case 'truck_updated':
                 $truckId = $details['truck_id'] ?? 'Unknown';
+                $truckNumber = $details['truck_number'] ?? 'unknown';
                 $fields = $details['updated_fields'] ?? [];
                 $fieldsText = is_array($fields) ? implode(', ', $fields) : 'multiple fields';
-                return "Updated truck #{$truckId}: {$fieldsText}";
+                $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
+                return "Updated truck {$truckDisplay}: {$fieldsText}";
                 
             case 'truck_created':
                 $truckId = $details['truck_id'] ?? 'Unknown';
-                return "Created new truck #{$truckId}";
+                $truckNumber = $details['truck_number'] ?? 'unknown';
+                $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
+                return "Created new truck {$truckDisplay}";
+                
+            case 'truck_deleted':
+                $truckId = $details['truck_id'] ?? 'Unknown';
+                $truckNumber = $details['truck_number'] ?? 'unknown';
+                $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
+                return "Deleted truck {$truckDisplay}";
                 
             case 'user_created':
                 $username = $details['username'] ?? 'Unknown';

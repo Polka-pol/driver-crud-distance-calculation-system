@@ -156,9 +156,16 @@ class TruckController
                 $updatedFields = array_filter($updatedFields, function($field) {
                     return !in_array($field, ['ID', 'updated_by']);
                 });
+                
+                // Get current truck number from database for logging
+                $truckNumberStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
+                $truckNumberStmt->execute(['ID' => $id]);
+                $truckData = $truckNumberStmt->fetch(PDO::FETCH_ASSOC);
+                $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
+                
                 ActivityLogger::log('truck_updated', [
                     'truck_id' => $id, 
-                    'truck_number' => $dbData['TruckNumber'] ?? 'unknown',
+                    'truck_number' => $truckNumber,
                     'updated_fields' => array_values($updatedFields)
                 ]);
             }
@@ -192,6 +199,19 @@ class TruckController
     public static function delete($id) {
         try {
             $pdo = Database::getConnection();
+            
+            // Get truck number before deletion for logging
+            $truckNumberStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
+            $truckNumberStmt->execute(['ID' => $id]);
+            $truckData = $truckNumberStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$truckData) {
+                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                return;
+            }
+            
+            $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
+            
             $sql = "DELETE FROM Trucks WHERE ID = :ID";
             $stmt = $pdo->prepare($sql);
             $stmt->execute(['ID' => $id]);
@@ -201,7 +221,10 @@ class TruckController
                  return;
             }
             
-            ActivityLogger::log('truck_deleted', ['truck_id' => $id]);
+            ActivityLogger::log('truck_deleted', [
+                'truck_id' => $id,
+                'truck_number' => $truckNumber
+            ]);
             self::sendResponse(['success' => true, 'message' => 'Truck deleted successfully.']);
 
         } catch (PDOException $e) {
