@@ -125,6 +125,16 @@
     color: #1f2937;
 }
 
+.period-indicator {
+    display: block;
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 5px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 /* ===== CONTROLS ===== */
 .admin-controls {
     display: flex;

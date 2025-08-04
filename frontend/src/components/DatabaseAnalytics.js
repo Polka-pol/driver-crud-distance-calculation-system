@@ -29,6 +29,7 @@ const DatabaseAnalytics = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [trendPeriod, setTrendPeriod] = useState('7'); // '7', '30', '365'
+    const [summaryPeriod, setSummaryPeriod] = useState('week'); // 'week', 'month', 'year', 'all'
     useEffect(() => {
         const fetchAnalyticsData = async () => {
             try {
@@ -49,8 +50,25 @@ const DatabaseAnalytics = () => {
         fetchAnalyticsData();
     }, []);
 
-    // Use week data by default
-    const dataForPeriod = analytics ? analytics.week : null;
+    // Get data for selected summary period
+    const getDataForPeriod = (period) => {
+        if (!analytics) return null;
+        
+        switch (period) {
+            case 'week':
+                return analytics.week;
+            case 'month':
+                return analytics.month || analytics.week; // fallback to week if month not available
+            case 'year':
+                return analytics.year || analytics.week; // fallback to week if year not available
+            case 'all':
+                return analytics.all || analytics.week; // fallback to week if all not available
+            default:
+                return analytics.week;
+        }
+    };
+
+    const dataForPeriod = getDataForPeriod(summaryPeriod);
     const extendedData = analytics ? analytics.extended : null;
 
     // Generate trend data based on selected period
@@ -148,6 +166,32 @@ const DatabaseAnalytics = () => {
         <div className="admin-container">
             <div className="admin-header">
                 <h3>Database Analytics</h3>
+                <div className="admin-period-selector">
+                    <button 
+                        onClick={() => setSummaryPeriod('week')} 
+                        className={`admin-period-btn ${summaryPeriod === 'week' ? 'active' : ''}`}
+                    >
+                        Week
+                    </button>
+                    <button 
+                        onClick={() => setSummaryPeriod('month')} 
+                        className={`admin-period-btn ${summaryPeriod === 'month' ? 'active' : ''}`}
+                    >
+                        Month
+                    </button>
+                    <button 
+                        onClick={() => setSummaryPeriod('year')} 
+                        className={`admin-period-btn ${summaryPeriod === 'year' ? 'active' : ''}`}
+                    >
+                        Year
+                    </button>
+                    <button 
+                        onClick={() => setSummaryPeriod('all')} 
+                        className={`admin-period-btn ${summaryPeriod === 'all' ? 'active' : ''}`}
+                    >
+                        All Time
+                    </button>
+                </div>
             </div>
 
             {dataForPeriod ? (
@@ -162,10 +206,43 @@ const DatabaseAnalytics = () => {
                                     : 0
                                 }%
                             </p>
+                            <small className="period-indicator">
+                                {summaryPeriod === 'week' ? 'Last 7 days' : 
+                                 summaryPeriod === 'month' ? 'Last 30 days' : 
+                                 summaryPeriod === 'year' ? 'Last 365 days' : 
+                                 'All time'}
+                            </small>
                         </div>
-                        <div className="admin-stat-card secondary"><h4>🚚 Drivers Checked</h4><p>{dataForPeriod.total_origins_checked || 0}</p></div>
-                        <div className="admin-stat-card primary"><h4>💾 Cache Hits</h4><p>{dataForPeriod.cache_hits || 0}</p></div>
-                        <div className="admin-stat-card danger"><h4>🌍 Mapbox Requests</h4><p>{dataForPeriod.mapbox_requests || 0}</p></div>
+                        <div className="admin-stat-card secondary">
+                            <h4>🚚 Drivers Checked</h4>
+                            <p>{dataForPeriod.total_origins_checked || 0}</p>
+                            <small className="period-indicator">
+                                {summaryPeriod === 'week' ? 'Last 7 days' : 
+                                 summaryPeriod === 'month' ? 'Last 30 days' : 
+                                 summaryPeriod === 'year' ? 'Last 365 days' : 
+                                 'All time'}
+                            </small>
+                        </div>
+                        <div className="admin-stat-card primary">
+                            <h4>💾 Cache Hits</h4>
+                            <p>{dataForPeriod.cache_hits || 0}</p>
+                            <small className="period-indicator">
+                                {summaryPeriod === 'week' ? 'Last 7 days' : 
+                                 summaryPeriod === 'month' ? 'Last 30 days' : 
+                                 summaryPeriod === 'year' ? 'Last 365 days' : 
+                                 'All time'}
+                            </small>
+                        </div>
+                        <div className="admin-stat-card danger">
+                            <h4>🌍 Mapbox Requests</h4>
+                            <p>{dataForPeriod.mapbox_requests || 0}</p>
+                            <small className="period-indicator">
+                                {summaryPeriod === 'week' ? 'Last 7 days' : 
+                                 summaryPeriod === 'month' ? 'Last 30 days' : 
+                                 summaryPeriod === 'year' ? 'Last 365 days' : 
+                                 'All time'}
+                            </small>
+                        </div>
                     </div>
 
                     {/* Cache Statistics */}
