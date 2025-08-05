@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useModalScrollLock } from '../utils/modalScrollLock';
 import './UserModal.css';
 
 const UserModal = ({ isOpen, onClose, onSave, user }) => {
@@ -11,6 +12,9 @@ const UserModal = ({ isOpen, onClose, onSave, user }) => {
     });
 
     const isEditMode = user && user.id;
+
+    // Prevent body scroll when modal is open
+    useModalScrollLock(isOpen);
 
     useEffect(() => {
         if (isEditMode) {

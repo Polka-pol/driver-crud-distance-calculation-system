@@ -7,6 +7,7 @@ import './NewDriverModal.css';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
 import AddressSearchBar from './AddressSearchBar';
+import { useModalScrollLock } from '../utils/modalScrollLock';
 
 const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
   <div style={{ position: "relative", width: "100%" }}>
@@ -51,14 +52,7 @@ const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
   const [isLoading, setIsLoading] = useState(false);
 
   // Prevent body scroll when modal is open
-  useEffect(() => {
-    document.body.classList.add('modal-open');
-
-    // Cleanup on unmount
-    return () => {
-      document.body.classList.remove('modal-open');
-    };
-  }, []);
+  useModalScrollLock(true);
 
   // Phone number formatting function
   const formatPhoneNumber = (value) => {

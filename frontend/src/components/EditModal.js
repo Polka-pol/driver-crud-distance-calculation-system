@@ -4,6 +4,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
 import { FaRegCalendarAlt } from "react-icons/fa";
 import AddressSearchBar from './AddressSearchBar';
+import { useModalScrollLock } from '../utils/modalScrollLock';
 import './EditModal.css';
 
 const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
@@ -42,18 +43,7 @@ const EditModal = ({
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
 
   // Prevent body scroll when modal is open
-  useEffect(() => {
-    if (editedTruck) {
-      document.body.classList.add('modal-open');
-    } else {
-      document.body.classList.remove('modal-open');
-    }
-
-    // Cleanup on unmount
-    return () => {
-      document.body.classList.remove('modal-open');
-    };
-  }, [editedTruck]);
+  useModalScrollLock(!!editedTruck);
 
   // Phone number formatting function
   const formatPhoneNumber = (value) => {

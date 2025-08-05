@@ -16,6 +16,7 @@ import MapPage from './components/MapPage';
 import { isAuthenticated, logout, getCurrentUser } from './utils/auth';
 import { apiClient } from './utils/apiClient';
 import { API_BASE_URL } from './config';
+import { useModalScrollLock } from './utils/modalScrollLock';
 
 function App() {
   const [user, setUser] = useState(getCurrentUser());
@@ -111,6 +112,9 @@ function App() {
 
     fetchTrucks();
   }, [isAuth]);
+
+  // Prevent body scroll when comment modal is open
+  useModalScrollLock(!!modalComment);
 
   const handleSearchChange = (field, value) => {
     switch (field) {

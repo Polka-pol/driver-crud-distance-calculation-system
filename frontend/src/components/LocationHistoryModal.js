@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
+import { useModalScrollLock } from '../utils/modalScrollLock';
 import './LocationHistoryModal.css';
 
 const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverName }) => {
@@ -41,18 +42,7 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
     }, [isOpen, truckId, fetchLocationHistory]);
 
     // Prevent body scroll when modal is open
-    useEffect(() => {
-        if (isOpen) {
-            document.body.classList.add('modal-open');
-        } else {
-            document.body.classList.remove('modal-open');
-        }
-
-        // Cleanup on unmount
-        return () => {
-            document.body.classList.remove('modal-open');
-        };
-    }, [isOpen]);
+    useModalScrollLock(isOpen);
 
     const handlePageChange = (page) => {
         fetchLocationHistory(page);
