@@ -89,19 +89,19 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                     {loading && (
                         <div className="loading-spinner">
                             <div className="spinner"></div>
-                            <p>Завантаження історії...</p>
+                            <p>Loading history...</p>
                         </div>
                     )}
                     
                     {error && (
                         <div className="error-message">
-                            <p>Помилка: {error}</p>
+                            <p>Error: {error}</p>
                         </div>
                     )}
                     
                     {!loading && !error && history.length === 0 && (
                         <div className="empty-state">
-                            <p>Історія змін локацій відсутня</p>
+                            <p>No location change history available</p>
                         </div>
                     )}
                     
@@ -130,11 +130,11 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                                 disabled={pagination.current_page === 1}
                                 onClick={() => handlePageChange(pagination.current_page - 1)}
                             >
-                                Попередня
+                                Previous
                             </button>
                             
                             <span className="pagination-info">
-                                Сторінка {pagination.current_page} з {pagination.total_pages}
+                                Page {pagination.current_page} of {pagination.total_pages}
                             </span>
                             
                             <button 
@@ -142,7 +142,7 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                                 disabled={pagination.current_page === pagination.total_pages}
                                 onClick={() => handlePageChange(pagination.current_page + 1)}
                             >
-                                Наступна
+                                Next
                             </button>
                         </div>
                     </div>
