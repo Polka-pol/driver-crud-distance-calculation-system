@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "0.1.0",
-  "homepage": "/test20",
+  "homepage": "",
   "private": true,
   "dependencies": {
     "chart.js": "^4.5.0",
