@@ -133,14 +133,12 @@ class DistanceController
             return;
         }
 
-        // NEW: If no origins provided, fetch from database
+        // Always fetch from database to get coordinates - frontend doesn't provide them
+        $originQueries = $this->fetchOriginsFromDatabase();
         if (empty($originQueries)) {
-            $originQueries = $this->fetchOriginsFromDatabase();
-            if (empty($originQueries)) {
-                http_response_code(404);
-                echo json_encode(['error' => 'No trucks found in database.']);
-                return;
-            }
+            http_response_code(404);
+            echo json_encode(['error' => 'No trucks found in database.']);
+            return;
         }
 
                     // Distance calculation batch started
@@ -181,16 +179,25 @@ class DistanceController
                     $cacheHits++;
                 } else {
                     // If not in cache, add to list for geocoding and Mapbox call
-                    $originsToGeocodeAndFetch[] = [
+                    $dataToFetch = [
                         'driverId' => $driverId,
                         'originalAddress' => $originalAddress,
                         'normalizedFromAddress' => $normalizedFromAddress // Keep for caching later
                     ];
+
+                    // Pass along coordinates if they were fetched from the database
+                    if (isset($preparedOrigin['coordinates'])) {
+                        $dataToFetch['coordinates'] = $preparedOrigin['coordinates'];
+                    }
+
+                    $originsToGeocodeAndFetch[] = $dataToFetch;
                 }
             }
 
             // STEP 3: Geocode and fetch remaining from Mapbox Matrix API for uncached origins
             $mapboxStats = [
+                'db_coordinate_hits' => 0,
+                'geocoded_addresses' => 0,
                 'total_uncached_and_geocoding_needed' => count($originsToGeocodeAndFetch),
                 'chunks_count' => 0,
                 'api_calls' => 0,
@@ -198,14 +205,64 @@ class DistanceController
                 'failed_results' => 0,
                 'cache_saves' => 0
             ];
+            
+            // Debug logging to understand what's happening
+            Logger::info('Distance calculation processing breakdown', [
+                'total_addresses_processed' => count($preparedAddresses),
+                'cache_hits' => $cacheHits,
+                'uncached_to_process' => count($originsToGeocodeAndFetch),
+                'first_few_uncached' => array_slice(array_map(function($item) {
+                    return [
+                        'driver_id' => $item['driverId'],
+                        'address' => $item['originalAddress'],
+                        'has_coordinates' => isset($item['coordinates'])
+                    ];
+                }, $originsToGeocodeAndFetch), 0, 5)
+            ]);
 
             $geocodedOriginsForMapbox = [];
             foreach ($originsToGeocodeAndFetch as $originData) {
-                $originCoords = $geocoder->getBestCoordinatesForLocation($originData['originalAddress']);
+                $originCoords = null;
+                $coordinateSource = 'unknown';
+                
+                // Check if we have coordinates from database
+                if (isset($originData['coordinates'])) {
+                    $originCoords = $originData['coordinates'];
+                    $coordinateSource = 'database';
+                    $mapboxStats['db_coordinate_hits']++;
+                    
+                    // Debug logging for first few records
+                    if ($mapboxStats['db_coordinate_hits'] <= 3) {
+                        Logger::info('Using database coordinates for distance calculation', [
+                            'driver_id' => $originData['driverId'],
+                            'address' => $originData['originalAddress'],
+                            'coordinates' => $originCoords,
+                            'coordinate_source' => $coordinateSource
+                        ]);
+                    }
+                } else {
+                    // Fallback to geocoding
+                    $originCoords = $geocoder->getBestCoordinatesForLocation($originData['originalAddress']);
+                    $coordinateSource = 'geocoding';
+                    $mapboxStats['geocoded_addresses']++;
+                    
+                    // Debug logging for first few records that need geocoding
+                    if ($mapboxStats['geocoded_addresses'] <= 3) {
+                        Logger::info('Fallback to geocoding for distance calculation', [
+                            'driver_id' => $originData['driverId'],
+                            'address' => $originData['originalAddress'],
+                            'has_coordinates_key' => isset($originData['coordinates']),
+                            'coordinates_value' => $originData['coordinates'] ?? 'not_set',
+                            'coordinate_source' => $coordinateSource
+                        ]);
+                    }
+                }
+                
                 if ($originCoords) {
                     $geocodedOriginsForMapbox[] = [
                         'driverId' => $originData['driverId'],
                         'normalizedFromAddress' => $originData['normalizedFromAddress'],
+                        'coordinate_source' => $coordinateSource,
                         'origin' => [
                             'formattedAddress' => $originData['originalAddress'], // for logging
                             'lat' => $originCoords['lat'],
@@ -213,7 +270,11 @@ class DistanceController
                         ]
                     ];
                 } else {
-                    $results[$originData['driverId']] = ['distance' => null, 'source' => 'geocoding_failed'];
+                    $results[$originData['driverId']] = [
+                        'distance' => null, 
+                        'source' => 'geocoding_failed',
+                        'coordinate_source' => $coordinateSource
+                    ];
                     $geocodingFailures++;
                 }
             }
@@ -286,24 +347,26 @@ class DistanceController
             
             // Mapbox processing completed
             
-            // FAST RESPONSE - send results immediately to client
+            // Summary log for the entire batch operation
+            Logger::info('Batch distance calculation summary', [
+                'destination' => $destinationQuery,
+                'total_origins_requested' => count($originQueries),
+                'stats' => [
+                    'distance_cache_hits' => $cacheHits,
+                    'db_coordinate_hits' => $mapboxStats['db_coordinate_hits'],
+                    'geocoded_addresses' => $mapboxStats['geocoded_addresses'],
+                    'geocoding_failures' => $geocodingFailures,
+                    'mapbox_matrix_requests' => $mapboxStats['api_calls'],
+                    'mapbox_successful_results' => $mapboxStats['successful_results'],
+                    'mapbox_failed_results' => $mapboxStats['failed_results'],
+                    'new_distances_cached' => $mapboxStats['cache_saves']
+                ]
+            ]);
+            
+            // Return the results
             http_response_code(200);
             echo json_encode($results);
 
-            // Finish the request to client immediately
-            if (function_exists('fastcgi_finish_request')) {
-                fastcgi_finish_request();
-            }
-
-            // BACKGROUND PHASE: Use preprocessed data (NO RE-GEOCODING!)
-            $this->backgroundResultsCaching([
-                'destination' => $destinationQuery,
-                'results' => $results,
-                'processed_origins' => $preparedAddresses, // Pass prepared addresses here for consistent caching
-                'normalized_destination' => $normalizedToAddress
-            ]);
-            
-            // Batch distance calculation completed - no logging for normal operations
 
         } catch (MapboxTokenException $e) {
             http_response_code(503);
@@ -330,14 +393,12 @@ class DistanceController
             return;
         }
 
-        // NEW: If no origins provided, fetch from database
+        // Always fetch from database to get all truck data consistently
+        $originQueries = $this->fetchOriginsFromDatabase();
         if (empty($originQueries)) {
-            $originQueries = $this->fetchOriginsFromDatabase();
-            if (empty($originQueries)) {
-                http_response_code(404);
-                echo json_encode(['error' => 'No trucks found in database.']);
-                return;
-            }
+            http_response_code(404);
+            echo json_encode(['error' => 'No trucks found in database.']);
+            return;
         }
 
         try {
@@ -952,17 +1013,49 @@ class DistanceController
     {
         $normalizedToAddress = $this->normalizeAddress($destinationQuery);
         $preparedAddresses = [];
+        
+        // Debug logging to see what we receive
+        $coordsCount = 0;
+        foreach ($originQueries as $originData) {
+            if (isset($originData['coordinates'])) {
+                $coordsCount++;
+            }
+        }
+        
+        Logger::info('prepareAddressesForCacheCheck input analysis', [
+            'total_origins' => count($originQueries),
+            'origins_with_coordinates' => $coordsCount,
+            'call_stack' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3),
+            'first_few_origins' => array_slice(array_map(function($item) {
+                return [
+                    'id' => $item['id'],
+                    'address' => $item['address'],
+                    'has_coordinates' => isset($item['coordinates']),
+                    'coordinate_source' => $item['coordinate_source'] ?? 'not_set',
+                    'coordinates_sample' => isset($item['coordinates']) ? $item['coordinates'] : 'missing'
+                ];
+            }, $originQueries), 0, 3)
+        ]);
+        
         foreach ($originQueries as $originData) {
             $driverId = $originData['id'];
             $originAddress = $originData['address'];
             $normalizedFromAddress = $this->normalizeAddress($originAddress);
 
-            $preparedAddresses[] = [
+            $preparedAddress = [
                 'driverId' => $driverId,
                 'originalAddress' => $originAddress,
                 'normalizedFromAddress' => $normalizedFromAddress,
                 'normalizedToAddress' => $normalizedToAddress
             ];
+            
+            // Add coordinates if available
+            if (isset($originData['coordinates'])) {
+                $preparedAddress['coordinates'] = $originData['coordinates'];
+                $preparedAddress['coordinate_source'] = $originData['coordinate_source'] ?? 'database';
+            }
+            
+            $preparedAddresses[] = $preparedAddress;
         }
         return $preparedAddresses;
     }
@@ -1028,18 +1121,52 @@ class DistanceController
         }
 
         try {
-            $sql = "SELECT ID, CityStateZip FROM Trucks WHERE CityStateZip IS NOT NULL AND CityStateZip != ''";
+            $sql = "SELECT ID, CityStateZip, latitude, longitude FROM Trucks WHERE CityStateZip IS NOT NULL AND CityStateZip != ''";
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute();
             $trucks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $origins = [];
+            $dbCoordsCount = 0;
+            $needsGeocodingCount = 0;
+            
             foreach ($trucks as $truck) {
-                $origins[] = [
+                $origin = [
                     'id' => (int)$truck['ID'],
                     'address' => trim($truck['CityStateZip'])
                 ];
+                
+                // Add coordinates if available
+                if ($truck['latitude'] !== null && $truck['longitude'] !== null && 
+                    $truck['latitude'] != 0 && $truck['longitude'] != 0) {
+                    $origin['coordinates'] = [
+                        'lat' => (float)$truck['latitude'],
+                        'lon' => (float)$truck['longitude']
+                    ];
+                    $origin['coordinate_source'] = 'database';
+                    $dbCoordsCount++;
+                } else {
+                    $origin['coordinate_source'] = 'needs_geocoding';
+                    $needsGeocodingCount++;
+                }
+                
+                $origins[] = $origin;
             }
+
+            // Log the coordinate availability statistics
+            Logger::info('Truck coordinates fetched from database', [
+                'total_trucks' => count($trucks),
+                'with_db_coordinates' => $dbCoordsCount,
+                'needs_geocoding' => $needsGeocodingCount,
+                'first_few_examples' => array_slice(array_map(function($truck) {
+                    return [
+                        'ID' => $truck['ID'],
+                        'CityStateZip' => $truck['CityStateZip'],
+                        'latitude' => $truck['latitude'],
+                        'longitude' => $truck['longitude']
+                    ];
+                }, $trucks), 0, 5)
+            ]);
 
             return $origins;
 
@@ -1084,6 +1211,20 @@ class DistanceController
             $results = [];
             $mapboxRequests = 0;
             $cacheHits = 0;
+            $dbCoordHits = 0;
+            $geocodedCoords = 0;
+
+            // Pre-geocode the destination address once to avoid repeated calls in the loop
+            $toCoords = $this->geocoder->getBestCoordinatesForLocation($load['origin_address']);
+
+            if (!$toCoords) {
+                Logger::error('Failed to geocode pickup address for load', [
+                    'load_id' => $loadId,
+                    'pickup_address' => $load['origin_address']
+                ]);
+                // Decide how to handle this - maybe return an error response
+                // For now, we will proceed but distance calculation will fail for uncached drivers
+            }
 
             foreach ($drivers as $driver) {
                 $driverLocation = $driver['CityStateZip'];
@@ -1094,32 +1235,55 @@ class DistanceController
                 $normalizedTo = $this->normalizeAddress($pickupAddress);
                 $cached = $this->cacheService->checkCache($normalizedFrom, $normalizedTo);
                 
+                $distanceMiles = null;
+                $coordinateSource = 'unknown';
+
                 if ($cached) {
                     $distanceMiles = $this->metersToMiles($cached['distance']);
                     $cacheHits++;
-                                 } else {
-                     // Get coordinates and calculate via Mapbox
-                     $fromCoords = $this->geocoder->getBestCoordinatesForLocation($driverLocation);
-                     $toCoords = $this->geocoder->getBestCoordinatesForLocation($pickupAddress);
-                     
-                     if ($fromCoords && $toCoords) {
-                         try {
-                             $mapboxResult = $this->mapboxService->getDistance($fromCoords, $toCoords);
-                             $this->cacheService->cacheDistance($normalizedFrom, $normalizedTo, $mapboxResult);
-                             $distanceMiles = $this->metersToMiles($mapboxResult['distance']);
-                             $mapboxRequests++;
-                         } catch (Exception $e) {
-                             Logger::warning("Mapbox distance calculation failed", [
-                                 'from' => $driverLocation,
-                                 'to' => $pickupAddress,
-                                 'error' => $e->getMessage()
-                             ]);
-                             $distanceMiles = null;
-                         }
-                     } else {
-                         $distanceMiles = null;
-                     }
-                 }
+                    $coordinateSource = 'distance_cache';
+                } else {
+                    // Optimized coordinate handling - use database coordinates if available
+                    $fromCoords = null;
+                    
+                    if ($driver['latitude'] !== null && $driver['longitude'] !== null && 
+                        $driver['latitude'] != 0 && $driver['longitude'] != 0) {
+                        $fromCoords = [
+                            'lat' => (float)$driver['latitude'],
+                            'lon' => (float)$driver['longitude']
+                        ];
+                        $coordinateSource = 'database';
+                        $dbCoordHits++;
+                    } else {
+                        $fromCoords = $this->geocoder->getBestCoordinatesForLocation($driverLocation);
+                        $coordinateSource = 'geocoding';
+                        $geocodedCoords++;
+                    }
+                    
+                    if ($fromCoords && $toCoords) {
+                        try {
+                            $mapboxResult = $this->mapboxService->getDistance($fromCoords, $toCoords);
+                            $this->cacheService->cacheDistance($normalizedFrom, $normalizedTo, $mapboxResult);
+                            $distanceMiles = $this->metersToMiles($mapboxResult['distance']);
+                            $mapboxRequests++;
+                        } catch (Exception $e) {
+                            Logger::warning("Mapbox distance calculation failed", [
+                                'driver_id' => $driver['ID'],
+                                'from' => $driverLocation,
+                                'to' => $pickupAddress,
+                                'coordinate_source' => $coordinateSource,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    } else {
+                         Logger::warning('Missing coordinates for distance calculation', [
+                            'driver_id' => $driver['ID'],
+                            'from_coords_source' => $coordinateSource,
+                            'from_coords' => $fromCoords ? 'available' : 'missing',
+                            'to_coords' => $toCoords ? 'available' : 'missing'
+                        ]);
+                    }
+                }
 
                 // Create or update load offer
                 $this->createOrUpdateLoadOffer($loadId, $driver['ID'], $distanceMiles);
@@ -1129,9 +1293,22 @@ class DistanceController
                     'driver_name' => $driver['DriverName'],
                     'location' => $driverLocation,
                     'distance_to_pickup_miles' => $distanceMiles,
-                    'cached' => $cached ? true : false
+                    'cached' => ($coordinateSource === 'distance_cache'),
+                    'coordinate_source' => $coordinateSource
                 ];
             }
+
+            // Summary Log
+            Logger::info('Distance calculation for load completed', [
+                'load_id' => $loadId,
+                'total_drivers' => count($drivers),
+                'stats' => [
+                    'distance_cache_hits' => $cacheHits,
+                    'db_coordinate_hits' => $dbCoordHits,
+                    'geocoded_addresses' => $geocodedCoords,
+                    'mapbox_requests' => $mapboxRequests
+                ]
+            ]);
 
             // Calculate delivery distance (pickup → delivery)
             $normalizedOrigin = $this->normalizeAddress($load['origin_address']);
@@ -1284,6 +1461,8 @@ class DistanceController
             ]);
         }
     }
+
+
 
     /**
      * Convert meters to miles

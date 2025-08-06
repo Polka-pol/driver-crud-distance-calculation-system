@@ -6,8 +6,10 @@ use App\Core\Database;
 use App\Core\Logger;
 use App\Core\ActivityLogger;
 use App\Core\Auth;
+use App\Services\GeocoderService;
 use PDO;
 use PDOException;
+use Exception;
 
 class TruckController
 {
@@ -33,7 +35,7 @@ class TruckController
                     TruckNumber, rate, Status, WhenWillBeThere, 
                     DriverName, contactphone, CellPhone, mail, 
                     CityStateZip, Dimensions, comments, ID,
-                    updated_by, updated_at
+                    updated_by, updated_at, latitude, longitude
                  FROM Trucks'
             );
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -53,7 +55,9 @@ class TruckController
                     'comment' => $row['comments'],
                     'id' => $row['ID'],
                     'updated_by' => $row['updated_by'],
-                    'updated_at' => $row['updated_at']
+                    'updated_at' => $row['updated_at'],
+                    'latitude' => $row['latitude'],
+                    'longitude' => $row['longitude']
                 ];
             }, $results);
 
@@ -122,6 +126,72 @@ class TruckController
             if (isset($data['cell_phone']) && !isset($data['contactphone'])) {
                 $updateFields[] = "contactphone = :contactphone";
                 $dbData['contactphone'] = $data['cell_phone'];
+            }
+            
+            // Automatic geocoding for location updates
+            if (isset($data['city_state_zip'])) {
+                // If coordinates are explicitly provided and are valid (non-zero), use them.
+                // Otherwise, always attempt to geocode the address.
+                $hasValidCoordinatesInInput = isset($data['latitude']) && isset($data['longitude']) && 
+                                              $data['latitude'] != 0 && $data['longitude'] != 0;
+                
+                if (!$hasValidCoordinatesInInput) {
+                    // Auto-geocode the address if coordinates are missing or invalid
+                    try {
+                        $geocoder = new GeocoderService();
+                        $coords = $geocoder->getBestCoordinatesForLocation($data['city_state_zip']);
+                        
+                        if ($coords && isset($coords['lat']) && isset($coords['lon'])) {
+                            $updateFields[] = "latitude = :latitude";
+                            $updateFields[] = "longitude = :longitude";
+                            $dbData['latitude'] = $coords['lat'];
+                            $dbData['longitude'] = $coords['lon'];
+                            
+                            Logger::info('Auto-geocoding successful', [
+                                'truck_id' => $id,
+                                'address' => $data['city_state_zip'],
+                                'coordinates' => $coords,
+                                'source' => 'auto_geocoding'
+                            ]);
+                        } else {
+                            // If geocoding failed, explicitly set coordinates to NULL to indicate no valid coordinates
+                            $updateFields[] = "latitude = :latitude";
+                            $updateFields[] = "longitude = :longitude";
+                            $dbData['latitude'] = null;
+                            $dbData['longitude'] = null;
+
+                            Logger::warning('Auto-geocoding failed - no coordinates returned', [
+                                'truck_id' => $id,
+                                'address' => $data['city_state_zip']
+                            ]);
+                        }
+                    } catch (Exception $e) {
+                        // If geocoding caused an exception, explicitly set coordinates to NULL
+                        $updateFields[] = "latitude = :latitude";
+                        $updateFields[] = "longitude = :longitude";
+                        $dbData['latitude'] = null;
+                        $dbData['longitude'] = null;
+
+                        Logger::error('Auto-geocoding error', [
+                            'truck_id' => $id,
+                            'address' => $data['city_state_zip'],
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                } else {
+                    // Use provided coordinates (they are already validated as non-zero)
+                    $updateFields[] = "latitude = :latitude";
+                    $updateFields[] = "longitude = :longitude";
+                    $dbData['latitude'] = $data['latitude'];
+                    $dbData['longitude'] = $data['longitude'];
+                    
+                    Logger::info('Using provided coordinates', [
+                        'truck_id' => $id,
+                        'address' => $data['city_state_zip'],
+                        'coordinates' => ['lat' => $data['latitude'], 'lon' => $data['longitude']],
+                        'source' => 'user_provided'
+                    ]);
+                }
             }
             
             // Always update the updated_by field
@@ -286,13 +356,16 @@ class TruckController
             $sql = 'SELECT 
                         t.TruckNumber, t.Status, t.DriverName, t.CellPhone, 
                         t.CityStateZip, t.ID, t.WhenWillBeThere, t.rate,
-                        ac.lat, ac.lon, ac.formatted_address
+                        COALESCE(t.latitude, ac.lat) as lat,
+                        COALESCE(t.longitude, ac.lon) as lon,
+                        COALESCE(ac.formatted_address, t.CityStateZip) as formatted_address
                      FROM Trucks t
                      LEFT JOIN address_cache ac ON t.CityStateZip = ac.search_query 
                         OR t.CityStateZip = ac.formatted_address
                         OR CONCAT(ac.city, ", ", ac.state, " ", ac.zip_code) = t.CityStateZip
                         OR CONCAT(ac.city, ", ", ac.state) = LEFT(t.CityStateZip, LENGTH(CONCAT(ac.city, ", ", ac.state)))
-                     WHERE ac.lat IS NOT NULL AND ac.lon IS NOT NULL
+                     WHERE (t.latitude IS NOT NULL AND t.longitude IS NOT NULL) 
+                        OR (ac.lat IS NOT NULL AND ac.lon IS NOT NULL)
                      GROUP BY t.ID';
             
             $stmt = $pdo->prepare($sql);
@@ -344,16 +417,7 @@ class TruckController
         try {
             $pdo = Database::getConnection();
             
-            $sql = "INSERT INTO Trucks (
-                        TruckNumber, DriverName, CellPhone, Status, CityStateZip, 
-                        comments, WhenWillBeThere, rate, mail, contactphone, Dimensions
-                    ) VALUES (
-                        :TruckNumber, :DriverName, :CellPhone, :Status, :CityStateZip, 
-                        :comments, :WhenWillBeThere, :rate, :mail, :contactphone, :Dimensions
-                    )";
-
-            $stmt = $pdo->prepare($sql);
-            
+            // Prepare base parameters
             $params = [
                 'TruckNumber' => $data['truck_no'],
                 'DriverName' => $data['driver_name'],
@@ -365,9 +429,72 @@ class TruckController
                 'rate' => $data['loads_mark'] ?? null,
                 'mail' => $data['email'] ?? null,
                 'contactphone' => $data['contactphone'] ?? null,
-                'Dimensions' => $data['dimensions_payload'] ?? null
+                'Dimensions' => $data['dimensions_payload'] ?? null,
+                'latitude' => null, // Initialize with null
+                'longitude' => null // Initialize with null
             ];
             
+            // Automatic geocoding for location
+            if (!empty($data['city_state_zip'])) {
+                // If coordinates are explicitly provided and are valid (non-zero), use them.
+                // Otherwise, always attempt to geocode the address.
+                $hasValidCoordinatesInInput = isset($data['latitude']) && isset($data['longitude']) && 
+                                              $data['latitude'] != 0 && $data['longitude'] != 0;
+
+                if (!$hasValidCoordinatesInInput) {
+                    // Auto-geocode the address if coordinates are missing or invalid
+                    try {
+                        $geocoder = new GeocoderService();
+                        $coords = $geocoder->getBestCoordinatesForLocation($data['city_state_zip']);
+                        
+                        if ($coords && isset($coords['lat']) && isset($coords['lon'])) {
+                            $params['latitude'] = $coords['lat'];
+                            $params['longitude'] = $coords['lon'];
+                            
+                            Logger::info('Auto-geocoding successful for new truck', [
+                                'address' => $data['city_state_zip'],
+                                'coordinates' => $coords,
+                                'source' => 'auto_geocoding'
+                            ]);
+                        } else {
+                            // If geocoding failed, explicitly set coordinates to NULL
+                            $params['latitude'] = null;
+                            $params['longitude'] = null;
+
+                            Logger::warning('Auto-geocoding failed for new truck - no coordinates returned', [
+                                'address' => $data['city_state_zip']
+                            ]);
+                        }
+                    } catch (Exception $e) {
+                        // If geocoding caused an exception, explicitly set coordinates to NULL
+                        $params['latitude'] = null;
+                        $params['longitude'] = null;
+
+                        Logger::error('Auto-geocoding error for new truck', [
+                            'address' => $data['city_state_zip'],
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                } else {
+                    // Use provided coordinates (they are already validated as non-zero)
+                    $params['latitude'] = $data['latitude'];
+                    $params['longitude'] = $data['longitude'];
+                    
+                    Logger::info('Using provided coordinates for new truck', [
+                        'address' => $data['city_state_zip'],
+                        'coordinates' => ['lat' => $data['latitude'], 'lon' => $data['longitude']],
+                        'source' => 'user_provided'
+                    ]);
+                }
+            }
+            
+            // Build dynamic SQL based on available parameters
+            $fields = array_keys($params);
+            $placeholders = ':' . implode(', :', $fields);
+            
+            $sql = "INSERT INTO Trucks (" . implode(', ', $fields) . ") VALUES (" . $placeholders . ")";
+            
+            $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
             
             $newTruckId = $pdo->lastInsertId();
@@ -375,7 +502,7 @@ class TruckController
             ActivityLogger::log('truck_created', ['truck_id' => $newTruckId, 'truck_number' => $data['truck_no']]);
 
             // Fetch the newly created truck to return it
-            $fetchStmt = $pdo->prepare("SELECT TruckNumber, rate, Status, WhenWillBeThere, DriverName, contactphone, CellPhone, mail, CityStateZip, Dimensions, comments, ID, updated_by, updated_at FROM Trucks WHERE ID = ?");
+            $fetchStmt = $pdo->prepare("SELECT TruckNumber, rate, Status, WhenWillBeThere, DriverName, contactphone, CellPhone, mail, CityStateZip, Dimensions, comments, ID, updated_by, updated_at, latitude, longitude FROM Trucks WHERE ID = ?");
             $fetchStmt->execute([$newTruckId]);
             $newTruck = $fetchStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -393,7 +520,9 @@ class TruckController
                 'comment' => $newTruck['comments'],
                 'id' => $newTruck['ID'],
                 'updated_by' => $newTruck['updated_by'],
-                'updated_at' => $newTruck['updated_at']
+                'updated_at' => $newTruck['updated_at'],
+                'latitude' => $newTruck['latitude'],
+                'longitude' => $newTruck['longitude']
             ];
 
             self::sendResponse(['success' => true, 'message' => 'Truck created successfully.', 'truck' => $mappedTruck]);
