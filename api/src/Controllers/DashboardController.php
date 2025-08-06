@@ -468,12 +468,7 @@ class DashboardController
             ]);
             $adminLogStmt->execute([$adminUserId, $adminDetails]);
 
-            Logger::info('User logged out by admin', [
-                'admin_user_id' => $adminUserId,
-                'admin_username' => $admin['username'] ?? 'Unknown',
-                'target_user_id' => $userId,
-                'target_username' => $user['username']
-            ]);
+
 
             self::sendResponse([
                 'success' => true, 

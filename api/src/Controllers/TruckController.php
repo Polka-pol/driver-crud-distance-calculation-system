@@ -84,12 +84,7 @@ class TruckController
             $currentUser = 'Unknown User';
             $userData = Auth::getCurrentUser();
             
-            // Debug logging
-            Logger::info('JWT User Data Debug', [
-                'userData' => $userData ? (array)$userData : null,
-                'hasFullName' => $userData && isset($userData->fullName),
-                'fullName' => $userData->fullName ?? 'not set'
-            ]);
+
             
             if ($userData && isset($userData->fullName)) {
                 $currentUser = $userData->fullName;
@@ -147,12 +142,7 @@ class TruckController
                             $dbData['latitude'] = $coords['lat'];
                             $dbData['longitude'] = $coords['lon'];
                             
-                            Logger::info('Auto-geocoding successful', [
-                                'truck_id' => $id,
-                                'address' => $data['city_state_zip'],
-                                'coordinates' => $coords,
-                                'source' => 'auto_geocoding'
-                            ]);
+
                         } else {
                             // If geocoding failed, explicitly set coordinates to NULL to indicate no valid coordinates
                             $updateFields[] = "latitude = :latitude";
@@ -185,12 +175,7 @@ class TruckController
                     $dbData['latitude'] = $data['latitude'];
                     $dbData['longitude'] = $data['longitude'];
                     
-                    Logger::info('Using provided coordinates', [
-                        'truck_id' => $id,
-                        'address' => $data['city_state_zip'],
-                        'coordinates' => ['lat' => $data['latitude'], 'lon' => $data['longitude']],
-                        'source' => 'user_provided'
-                    ]);
+
                 }
             }
             
@@ -219,12 +204,7 @@ class TruckController
             
             $sql = "UPDATE Trucks SET " . implode(', ', $updateFields) . " WHERE ID = :ID";
             
-            // Log what fields are being updated
-            Logger::info('Truck update fields', [
-                'truck_id' => $id,
-                'update_fields' => array_keys($dbData),
-                'sql' => $sql
-            ]);
+
             $stmt = $pdo->prepare($sql);
             $stmt->execute($dbData);
 
@@ -239,23 +219,11 @@ class TruckController
                 if (isset($data['city_state_zip'])) {
                     $newLocation = $data['city_state_zip'];
                     
-                    // Debug logging
-                    Logger::info('Location change check', [
-                        'truck_id' => $id,
-                        'old_location' => $oldLocation,
-                        'new_location' => $newLocation,
-                        'locations_different' => $oldLocation !== $newLocation,
-                        'old_location_not_null' => $oldLocation !== null
-                    ]);
+
                     
                     // Only log if location actually changed
                     if ($oldLocation !== $newLocation && $oldLocation !== null) {
-                        Logger::info('Logging location change', [
-                            'truck_id' => $id,
-                            'truck_number' => $truckNumber,
-                            'old_location' => $oldLocation,
-                            'new_location' => $newLocation
-                        ]);
+
                         self::logLocationChange($pdo, $id, $truckNumber, $oldLocation, $newLocation, $userData);
                     }
                 }
@@ -451,11 +419,7 @@ class TruckController
                             $params['latitude'] = $coords['lat'];
                             $params['longitude'] = $coords['lon'];
                             
-                            Logger::info('Auto-geocoding successful for new truck', [
-                                'address' => $data['city_state_zip'],
-                                'coordinates' => $coords,
-                                'source' => 'auto_geocoding'
-                            ]);
+
                         } else {
                             // If geocoding failed, explicitly set coordinates to NULL
                             $params['latitude'] = null;
@@ -480,11 +444,7 @@ class TruckController
                     $params['latitude'] = $data['latitude'];
                     $params['longitude'] = $data['longitude'];
                     
-                    Logger::info('Using provided coordinates for new truck', [
-                        'address' => $data['city_state_zip'],
-                        'coordinates' => ['lat' => $data['latitude'], 'lon' => $data['longitude']],
-                        'source' => 'user_provided'
-                    ]);
+
                 }
             }
             
@@ -570,12 +530,7 @@ class TruckController
                 'new_location' => $newLocation
             ]);
             
-            Logger::info('Location change logged', [
-                'truck_id' => $truckId,
-                'truck_number' => $truckNumber,
-                'old_location' => $oldLocation,
-                'new_location' => $newLocation
-            ]);
+
             
         } catch (PDOException $e) {
             Logger::error('Failed to log location change', [

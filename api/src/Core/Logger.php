@@ -25,9 +25,9 @@ class Logger
             self::$logger = new MonologLogger('connex_app');
             
             // Log errors to a rotating file to prevent it from getting too large.
-            // This will keep 7 days of logs. Changed to INFO level for performance debugging.
+            // Changed to WARNING level to reduce log spam
             $logPath = __DIR__ . '/../../logs/app.log';
-            $handler = new RotatingFileHandler($logPath, 7, MonologLogger::INFO);
+            $handler = new RotatingFileHandler($logPath, 7, MonologLogger::WARNING);
             self::$logger->pushHandler($handler);
 
         } catch (Exception $e) {
@@ -44,7 +44,8 @@ class Logger
 
     public static function info(string $message, array $context = [])
     {
-        self::getLogger()->info($message, $context);
+        // INFO logging disabled to reduce log spam
+        // self::getLogger()->info($message, $context);
     }
 
     public static function warning(string $message, array $context = [])

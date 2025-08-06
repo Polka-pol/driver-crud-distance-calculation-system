@@ -121,7 +121,7 @@ class DriverActivityLogger
                 ";
                 
                 $pdo->exec($createTableSQL);
-                Logger::info('Created driver_activity_logs table');
+
             }
         } catch (PDOException $e) {
             Logger::error('Failed to ensure driver_activity_logs table exists', [

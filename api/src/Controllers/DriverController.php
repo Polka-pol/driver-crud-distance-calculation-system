@@ -527,12 +527,7 @@ class DriverController
                     'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
                 ], $driver['ID']);
             } else {
-                // Log to regular activity logger if driver not found
-                Logger::info('Driver login failure - driver not found', [
-                    'cell_phone' => $cellPhone,
-                    'reason' => $reason,
-                    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
-                ]);
+
             }
         } catch (PDOException $e) {
             Logger::error('Failed to log driver login failure', ['error' => $e->getMessage()]);
