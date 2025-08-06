@@ -98,34 +98,25 @@ class DistanceController
 
         } catch (MapboxTokenException $e) {
             http_response_code(503);
-            echo json_encode(['error' => 'Service Unavailable', 'message' => $e->getMessage()]);
+            echo json_encode(['error' => 'Mapbox service temporarily unavailable.']);
         } catch (MapboxRateLimitException $e) {
-            http_response_code(503);
-            echo json_encode(['error' => 'Rate Limited', 'message' => $e->getMessage()]);
+            http_response_code(429);
+            echo json_encode(['error' => 'Mapbox rate limit exceeded.']);
         } catch (Exception $e) {
-            Logger::error("Distance calculation failed", [
-                'origin' => $originQuery,
-                'destination' => $destinationQuery,
-                'error' => $e->getMessage()
-            ]);
+            Logger::error('Distance calculation failed', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo json_encode([
-                'error' => 'Distance calculation failed',
-                'message' => $e->getMessage()
-            ]);
+            echo json_encode(['error' => 'Distance calculation failed.']);
         }
     }
-    
+
     /**
-     * Calculates distances for a batch of origins to a single destination.
+     * Calculates distances for multiple origins to a single destination.
      */
     public function calculateBatch()
     {
-            // Batch processing started // Track total batch processing time
-        
         $input = json_decode(file_get_contents('php://input'), true);
-        $originQueries = $input['origins'] ?? null; // Expected: [['id' => driverId, 'address' => '...'], ...]
         $destinationQuery = $input['destination'] ?? null;
+        $queryType = $input['query_type'] ?? 'cache_check_with_stats';
 
         if (!$destinationQuery) {
             http_response_code(400);

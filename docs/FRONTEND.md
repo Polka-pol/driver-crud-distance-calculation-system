@@ -142,7 +142,6 @@ Analytics dashboard showing:
 - User activity statistics
 - Database analytics
 - Recent activity feed
-- User heatmaps
 
 #### DispatcherDashboard.js
 Main dispatcher interface with:

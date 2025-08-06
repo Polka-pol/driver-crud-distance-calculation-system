@@ -60,6 +60,7 @@ class AuthController
                 'message' => 'Login successful.',
                 'token'   => $jwt,
                 'user'    => [
+                    'id' => $user['id'],
                     'fullName' => $user['full_name'],
                     'mobileNumber' => $user['mobile_number'],
                     'role' => $user['role']

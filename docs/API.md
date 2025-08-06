@@ -334,8 +334,7 @@ Get dashboard analytics data.
     },
     "user_daily_stats": { ... },
     "db_analytics": { ... },
-    "recent_activity": [ ... ],
-    "user_heatmaps": { ... }
+    "recent_activity": [ ... ]
   }
 }
 ```

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import DistanceCell from './DistanceCell';
 import StatusBadge from './StatusBadge';
+import HoldCell from './HoldCell';
 import './TruckTable.css';
 
 // Conversion constant - same as in DistanceCell
@@ -19,7 +20,12 @@ const TruckTable = ({
   onRefresh,
   isRefreshing,
   isUpdated,
-  onLocationClick
+  onLocationClick,
+  currentUserId,
+  onHoldClick,
+  onRemoveHold,
+  onHoldExpired,
+  serverTimeOffset
 }) => {
   const [expandedCards, setExpandedCards] = useState(new Set());
   const [toastMessage, setToastMessage] = useState('');
@@ -112,7 +118,7 @@ const TruckTable = ({
   };
 
   const handlePhoneClick = (phoneNumber) => {
-    if (!phoneNumber || phoneNumber === '-') return;
+    if (!phoneNumber || phoneNumber === '-' || phoneNumber === '***') return;
     
     // Clean the phone number (remove spaces, dashes, etc.)
     const cleanedPhone = phoneNumber.replace(/[^\d+]/g, '');
@@ -166,7 +172,7 @@ const TruckTable = ({
   };
 
   // Mobile card component
-  const MobileCard = ({ truck }) => {
+  const MobileCard = ({ truck, currentUserId }) => {
     const isExpanded = expandedCards.has(truck.id);
     const distanceText = getDistanceText(truck);
 
@@ -216,8 +222,17 @@ const TruckTable = ({
               <span className="mobile-detail-value">{truck.truck_no}</span>
             </div>
             <div className="mobile-detail-row">
-              <span className="mobile-detail-label">Loads/Mark:</span>
-              <span className="mobile-detail-value">{truck.loads_mark}</span>
+              <span className="mobile-detail-label">Mark/Hold:</span>
+              <span className="mobile-detail-value">
+                                                                   <HoldCell
+                    truck={truck}
+                    currentUserId={currentUserId}
+                    onHoldClick={onHoldClick}
+                    onRemoveHold={onRemoveHold}
+                    onHoldExpired={onHoldExpired}
+                    serverTimeOffset={serverTimeOffset}
+                  />
+              </span>
             </div>
             <div className="mobile-detail-row">
               <span className="mobile-detail-label">Contact phone:</span>
@@ -308,7 +323,7 @@ const TruckTable = ({
         
         <div className="mobile-cards-container">
           {trucks.map(truck => (
-            <MobileCard key={truck.id || truck.truck_no} truck={truck} />
+            <MobileCard key={truck.id || truck.truck_no} truck={truck} currentUserId={currentUserId} />
           ))}
         </div>
       </div>
@@ -333,7 +348,7 @@ const TruckTable = ({
                 )}
               </div>
             </th>
-            <th className="col-loads-mark">Loads/Mark</th>
+            <th className="col-loads-mark">Mark/Hold</th>
             <th className="col-status">Status</th>
             <th className="col-when">Updated</th>
             <th className="col-driver">Driver name</th>
@@ -382,7 +397,16 @@ const TruckTable = ({
                 />
               </td>
               <td className="col-truck-no">{truck.truck_no}</td>
-              <td className="col-loads-mark">{truck.loads_mark}</td>
+              <td className="col-loads-mark">
+                <HoldCell
+                  truck={truck}
+                  currentUserId={currentUserId}
+                  onHoldClick={onHoldClick}
+                  onRemoveHold={onRemoveHold}
+                  onHoldExpired={onHoldExpired}
+                  serverTimeOffset={serverTimeOffset}
+                />
+              </td>
               <td className="col-status">
                 <StatusBadge 
                   status={truck.status} 

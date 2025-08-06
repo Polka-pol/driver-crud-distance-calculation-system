@@ -220,6 +220,54 @@ if (preg_match('/^\/trucks\/(\d+)\/location-history\/count$/', $apiRoute, $match
     exit();
 }
 
+// Hold functionality routes
+// Route for placing a hold on a truck
+if (preg_match('/^\/trucks\/(\d+)\/hold$/', $apiRoute, $matches)) {
+    $truckId = (int)$matches[1];
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    
+    if ($requestMethod === 'POST') {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['dispatcher_id']) || !isset($data['dispatcher_name'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Dispatcher ID and name are required.']);
+            exit();
+        }
+        TruckController::placeHold($truckId, $data['dispatcher_id'], $data['dispatcher_name']);
+        exit();
+    }
+    
+    if ($requestMethod === 'DELETE') {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['dispatcher_id'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Dispatcher ID is required.']);
+            exit();
+        }
+        TruckController::removeHold($truckId, $data['dispatcher_id']);
+        exit();
+    }
+    
+    if ($requestMethod === 'GET') {
+        TruckController::getHoldInfo($truckId);
+        exit();
+    }
+}
+
+// Route for cleaning up expired holds
+if ($apiRoute === '/trucks/hold/cleanup' && $requestMethod === 'GET') {
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    TruckController::cleanupExpiredHolds();
+    exit();
+}
+
+// Route for getting server time and hold countdowns
+if ($apiRoute === '/trucks/hold/time' && $requestMethod === 'GET') {
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    TruckController::getServerTimeAndHolds();
+    exit();
+}
+
 // Route for the new smart search
 if ($apiRoute === '/search' && $requestMethod === 'GET') {
     // Allow all authenticated users to use address search (no role restriction)

@@ -54,6 +54,7 @@ function App() {
     truckNumber: null,
     driverName: null
   });
+  const [serverTimeOffset, setServerTimeOffset] = useState(0);
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
@@ -111,6 +112,7 @@ function App() {
     };
 
     fetchTrucks();
+    syncServerTime(); // Sync server time on page load
   }, [isAuth]);
 
   // Prevent body scroll when comment modal is open
@@ -387,6 +389,117 @@ function App() {
     }
   };
 
+  // Hold functionality methods
+  const handlePlaceHold = async (truckId) => {
+    if (!user) {
+      alert('You must be logged in to place holds.');
+      return;
+    }
+
+    // Get user ID from different possible fields
+    const userId = user.id || user.userId || user.user_id;
+    if (!userId) {
+      alert('User ID not found. Please log in again.');
+      return;
+    }
+
+    try {
+      const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/hold`, {
+        method: 'POST',
+        body: JSON.stringify({
+          dispatcher_id: userId,
+          dispatcher_name: user.fullName || user.full_name || user.username
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Refresh truck data to show updated hold status
+          await handleManualRefresh();
+        } else {
+          alert('Failed to place hold: ' + result.message);
+        }
+      } else if (response.status === 409) {
+        const result = await response.json();
+        if (result.hold_info) {
+          alert(`Truck is already on hold by ${result.hold_info.dispatcher_name}. Please refresh the page to see the current status.`);
+        } else {
+          alert('Truck is already on hold by another dispatcher. Please refresh the page to see the current status.');
+        }
+        // Refresh data to show current hold status
+        await handleManualRefresh();
+      } else {
+        throw new Error('Failed to place hold');
+      }
+    } catch (error) {
+      console.error('Error placing hold:', error);
+      alert('Failed to place hold');
+    }
+  };
+
+  const handleRemoveHold = async (truckId) => {
+    if (!user) {
+      alert('You must be logged in to remove holds.');
+      return;
+    }
+
+    // Get user ID from different possible fields
+    const userId = user.id || user.userId || user.user_id;
+    if (!userId) {
+      alert('User ID not found. Please log in again.');
+      return;
+    }
+
+    try {
+      const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/hold`, {
+        method: 'DELETE',
+        body: JSON.stringify({
+          dispatcher_id: userId
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Refresh truck data to show updated hold status
+          await handleManualRefresh();
+        } else {
+          alert('Failed to remove hold: ' + result.message);
+        }
+      } else if (response.status === 409) {
+        // Hold was already removed by another user, just refresh the data
+        await handleManualRefresh();
+      } else {
+        throw new Error('Failed to remove hold');
+      }
+    } catch (error) {
+      console.error('Error removing hold:', error);
+      alert('Failed to remove hold');
+    }
+  };
+
+  const syncServerTime = async () => {
+    try {
+      const response = await apiClient(`${API_BASE_URL}/trucks/hold/time`, {
+        method: 'GET'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.server_time) {
+          const serverTime = new Date(data.server_time);
+          const clientTime = new Date();
+          const offset = serverTime.getTime() - clientTime.getTime();
+          setServerTimeOffset(offset);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to sync server time:', error);
+    }
+  };
+
+
   const handleCalculate = async () => {
     if (!searchQuery) return;
     
@@ -645,6 +758,11 @@ function App() {
               isRefreshing={isRefreshing}
               isUpdated={isUpdated}
               onLocationClick={handleLocationClick}
+              currentUserId={user?.id || user?.userId || user?.user_id}
+              onHoldClick={handlePlaceHold}
+              onRemoveHold={handleRemoveHold}
+              onHoldExpired={handleManualRefresh}
+              serverTimeOffset={serverTimeOffset}
             />
 
             <Pagination

@@ -769,3 +769,142 @@
     }
   }
 } 
+
+/* Hold functionality styles */
+.hold-cell {
+  position: relative;
+  text-align: center;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.loads-mark-value {
+  font-size: 12px;
+  color: #333;
+  margin-bottom: 2px;
+  transition: opacity 0.2s;
+}
+
+.hold-cell:hover .loads-mark-value {
+  opacity: 0;
+}
+
+.hold-badge {
+  background: #ff4444;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: default;
+  user-select: none;
+  margin-bottom: 2px;
+}
+
+.hold-badge.clickable {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.hold-badge.clickable:hover {
+  background: #ff6666;
+}
+
+.hold-countdown {
+  font-size: 10px;
+  color: #666;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.hold-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2c3e50;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1001;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease-in-out;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 4px;
+}
+
+.hold-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 4px solid #2c3e50;
+}
+
+.hold-cell:hover .hold-tooltip {
+  opacity: 1;
+}
+
+.hold-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.2s, background-color 0.2s;
+  background: #ffa500;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: bold;
+  z-index: 10;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hold-button.visible {
+  opacity: 1;
+}
+
+.hold-button:hover {
+  background: #ff8c00;
+}
+
+/* Mobile styles for hold functionality */
+.mobile-detail-row .hold-cell {
+  min-height: auto;
+  padding: 4px 0;
+}
+
+.mobile-detail-row .hold-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+.mobile-detail-row .hold-countdown {
+  font-size: 9px;
+}
+
+.mobile-detail-row .hold-button {
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+.mobile-detail-row .loads-mark-value {
+  font-size: 11px;
+} 

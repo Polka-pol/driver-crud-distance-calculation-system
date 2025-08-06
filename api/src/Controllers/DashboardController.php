@@ -81,7 +81,7 @@ class DashboardController
             $mapboxRequests = (int)($distanceStats['mapbox_requests'] ?? 0);
 
             // =========================================================
-            // 3. Live Feed - Recent Activities with detailed info (last 10)
+            // 3. Live Feed - Recent Activities with detailed info (last 50)
             // Exclude individual cache/mapbox records, show aggregated distance info
             // =========================================================
             $recentActivitiesStmt = $pdo->query("
@@ -90,7 +90,7 @@ class DashboardController
                 JOIN users u ON a.user_id = u.id
                 WHERE a.action NOT IN ('distance_calculation_cached', 'distance_calculation_mapbox')
                 ORDER BY a.created_at DESC
-                LIMIT 10
+                LIMIT 50
             ");
             $recentActivitiesRaw = $recentActivitiesStmt->fetchAll(PDO::FETCH_ASSOC);
             
@@ -131,58 +131,6 @@ class DashboardController
             ");
             $userDailyStatsStmt->execute([':today' => $todayStart]);
             $userDailyStats = $userDailyStatsStmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // =========================================================
-            // 4.5. User Activity Heatmap (24 hours x 7 days)
-            // =========================================================
-            $heatmapStmt = $pdo->prepare("
-                SELECT 
-                    u.username,
-                    u.full_name,
-                    u.role,
-                    HOUR(a.created_at) as hour,
-                    DAYOFWEEK(a.created_at) as day_of_week,
-                    COUNT(CASE WHEN a.action = 'distance_batch_calculated' 
-                          AND JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats' THEN 1 END) as distance_calcs,
-                    COUNT(CASE WHEN a.action = 'truck_updated' THEN 1 END) as truck_updates,
-                    COUNT(*) as total_activity
-                FROM activity_logs a
-                JOIN users u ON a.user_id = u.id
-                WHERE a.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                GROUP BY u.username, u.full_name, u.role, HOUR(a.created_at), DAYOFWEEK(a.created_at)
-                ORDER BY u.username, day_of_week, hour
-            ");
-            $heatmapStmt->execute();
-            $heatmapData = $heatmapStmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            // Process heatmap data into structured format with separated activity types
-            $userHeatmaps = [];
-            foreach ($heatmapData as $entry) {
-                $username = $entry['username'];
-                if (!isset($userHeatmaps[$username])) {
-                    $userHeatmaps[$username] = [
-                        'username' => $username,
-                        'full_name' => $entry['full_name'],
-                        'role' => $entry['role'],
-                        'heatmap' => array_fill(1, 7, array_fill(0, 24, [
-                            'distance_calcs' => 0,
-                            'truck_updates' => 0,
-                            'total' => 0
-                        ])) // days 1-7, hours 0-23
-                    ];
-                }
-                $day = (int)$entry['day_of_week']; // 1=Sunday, 2=Monday, ..., 7=Saturday
-                $hour = (int)$entry['hour'];
-                $distanceCalcs = (int)$entry['distance_calcs'];
-                $truckUpdates = (int)$entry['truck_updates'];
-                $totalActivity = (int)$entry['total_activity'];
-                
-                $userHeatmaps[$username]['heatmap'][$day][$hour] = [
-                    'distance_calcs' => $distanceCalcs,
-                    'truck_updates' => $truckUpdates,
-                    'total' => $totalActivity
-                ];
-            }
 
             // =========================================================
             // 5. Most Active Users (Last 7 Days)
@@ -273,7 +221,6 @@ class DashboardController
                 'recent_activity' => $recentActivities,
                 'user_daily_stats' => $userDailyStats,
                 'top_users_7d' => $topUsers,
-                'user_heatmaps' => array_values($userHeatmaps),
                 'db_analytics' => [
                     'week' => [
                         'total_queries' => (int)$activityCounts['distance_calcs_count'],

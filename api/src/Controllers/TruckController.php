@@ -35,20 +35,29 @@ class TruckController
                     TruckNumber, rate, Status, WhenWillBeThere, 
                     DriverName, contactphone, CellPhone, mail, 
                     CityStateZip, Dimensions, comments, ID,
-                    updated_by, updated_at, latitude, longitude
+                    updated_by, updated_at, latitude, longitude,
+                    hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name
                  FROM Trucks'
             );
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $mappedResults = array_map(function ($row) {
+                // Get current user ID from JWT token
+                $currentUser = Auth::getCurrentUser();
+                $currentUserId = $currentUser ? $currentUser->id : null;
+                
+                // Check if phone numbers should be hidden
+                $shouldHidePhones = $row['hold_status'] === 'active' && 
+                                  $row['hold_dispatcher_id'] != $currentUserId;
+                
                 return [
                     'truck_no' => $row['TruckNumber'],
                     'loads_mark' => $row['rate'] ?? '',
                     'status' => $row['Status'],
                     'arrival_time' => $row['WhenWillBeThere'],
                     'driver_name' => $row['DriverName'],
-                    'contactphone' => $row['contactphone'],
-                    'cell_phone' => $row['CellPhone'],
+                    'contactphone' => $shouldHidePhones ? '***' : $row['contactphone'],
+                    'cell_phone' => $shouldHidePhones ? '***' : $row['CellPhone'],
                     'email' => $row['mail'],
                     'city_state_zip' => $row['CityStateZip'],
                     'dimensions_payload' => $row['Dimensions'],
@@ -57,7 +66,11 @@ class TruckController
                     'updated_by' => $row['updated_by'],
                     'updated_at' => $row['updated_at'],
                     'latitude' => $row['latitude'],
-                    'longitude' => $row['longitude']
+                    'longitude' => $row['longitude'],
+                    'hold_status' => $row['hold_status'],
+                    'hold_started_at' => $row['hold_started_at'],
+                    'hold_dispatcher_id' => $row['hold_dispatcher_id'],
+                    'hold_dispatcher_name' => $row['hold_dispatcher_name']
                 ];
             }, $results);
 
@@ -326,7 +339,8 @@ class TruckController
                         t.CityStateZip, t.ID, t.WhenWillBeThere, t.rate,
                         COALESCE(t.latitude, ac.lat) as lat,
                         COALESCE(t.longitude, ac.lon) as lon,
-                        COALESCE(ac.formatted_address, t.CityStateZip) as formatted_address
+                        COALESCE(ac.formatted_address, t.CityStateZip) as formatted_address,
+                        t.hold_status, t.hold_started_at, t.hold_dispatcher_id, t.hold_dispatcher_name
                      FROM Trucks t
                      LEFT JOIN address_cache ac ON t.CityStateZip = ac.search_query 
                         OR t.CityStateZip = ac.formatted_address
@@ -341,18 +355,30 @@ class TruckController
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $mappedResults = array_map(function ($row) {
+                // Get current user ID from JWT token
+                $currentUser = Auth::getCurrentUser();
+                $currentUserId = $currentUser ? $currentUser->id : null;
+                
+                // Check if phone numbers should be hidden
+                $shouldHidePhones = $row['hold_status'] === 'active' && 
+                                  $row['hold_dispatcher_id'] != $currentUserId;
+                
                 return [
                     'id' => $row['ID'],
                     'truck_no' => $row['TruckNumber'],
                     'status' => $row['Status'],
                     'driver_name' => $row['DriverName'],
-                    'cell_phone' => $row['CellPhone'],
+                    'cell_phone' => $shouldHidePhones ? '***' : $row['CellPhone'],
                     'city_state_zip' => $row['CityStateZip'],
                     'arrival_time' => $row['WhenWillBeThere'],
                     'loads_mark' => $row['rate'] ?? '',
                     'lat' => (float)$row['lat'],
                     'lon' => (float)$row['lon'],
-                    'formatted_address' => $row['formatted_address']
+                    'formatted_address' => $row['formatted_address'],
+                    'hold_status' => $row['hold_status'],
+                    'hold_started_at' => $row['hold_started_at'],
+                    'hold_dispatcher_id' => $row['hold_dispatcher_id'],
+                    'hold_dispatcher_name' => $row['hold_dispatcher_name']
                 ];
             }, $results);
 
@@ -462,7 +488,7 @@ class TruckController
             ActivityLogger::log('truck_created', ['truck_id' => $newTruckId, 'truck_number' => $data['truck_no']]);
 
             // Fetch the newly created truck to return it
-            $fetchStmt = $pdo->prepare("SELECT TruckNumber, rate, Status, WhenWillBeThere, DriverName, contactphone, CellPhone, mail, CityStateZip, Dimensions, comments, ID, updated_by, updated_at, latitude, longitude FROM Trucks WHERE ID = ?");
+            $fetchStmt = $pdo->prepare("SELECT TruckNumber, rate, Status, WhenWillBeThere, DriverName, contactphone, CellPhone, mail, CityStateZip, Dimensions, comments, ID, updated_by, updated_at, latitude, longitude, hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name FROM Trucks WHERE ID = ?");
             $fetchStmt->execute([$newTruckId]);
             $newTruck = $fetchStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -482,7 +508,11 @@ class TruckController
                 'updated_by' => $newTruck['updated_by'],
                 'updated_at' => $newTruck['updated_at'],
                 'latitude' => $newTruck['latitude'],
-                'longitude' => $newTruck['longitude']
+                'longitude' => $newTruck['longitude'],
+                'hold_status' => $newTruck['hold_status'],
+                'hold_started_at' => $newTruck['hold_started_at'],
+                'hold_dispatcher_id' => $newTruck['hold_dispatcher_id'],
+                'hold_dispatcher_name' => $newTruck['hold_dispatcher_name']
             ];
 
             self::sendResponse(['success' => true, 'message' => 'Truck created successfully.', 'truck' => $mappedTruck]);
@@ -631,6 +661,290 @@ class TruckController
                 'error' => $e->getMessage(),
                 'truck_id' => $truckId
             ]);
+            self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
+        }
+    }
+
+    /**
+     * Place a hold on a truck for 15 minutes
+     */
+    public static function placeHold($truckId, $dispatcherId, $dispatcherName)
+    {
+        try {
+            $pdo = Database::getConnection();
+            
+            // Check if truck exists
+            $truckStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
+            $truckStmt->execute(['ID' => $truckId]);
+            $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$truckData) {
+                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                return;
+            }
+            
+            $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
+            
+            // Check if truck is already on hold
+            $holdStmt = $pdo->prepare("SELECT hold_status, hold_dispatcher_id, hold_dispatcher_name FROM Trucks WHERE ID = :ID");
+            $holdStmt->execute(['ID' => $truckId]);
+            $holdData = $holdStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($holdData['hold_status'] === 'active') {
+                self::sendResponse([
+                    'success' => false, 
+                    'message' => 'Truck is already on hold.',
+                    'hold_info' => [
+                        'dispatcher_name' => $holdData['hold_dispatcher_name'],
+                        'dispatcher_id' => $holdData['hold_dispatcher_id']
+                    ]
+                ], 409);
+                return;
+            }
+            
+            // Place hold with optimistic locking to prevent race conditions
+            $updateStmt = $pdo->prepare("
+                UPDATE Trucks 
+                SET hold_status = 'active', 
+                    hold_started_at = NOW(), 
+                    hold_dispatcher_id = :dispatcher_id, 
+                    hold_dispatcher_name = :dispatcher_name
+                WHERE ID = :truck_id AND (hold_status IS NULL OR hold_status != 'active')
+            ");
+            
+            $updateStmt->execute([
+                'dispatcher_id' => $dispatcherId,
+                'dispatcher_name' => $dispatcherName,
+                'truck_id' => $truckId
+            ]);
+            
+            // Check if any rows were actually updated
+            if ($updateStmt->rowCount() === 0) {
+                // Hold was already placed by another request
+                $holdStmt = $pdo->prepare("SELECT hold_dispatcher_name FROM Trucks WHERE ID = :ID");
+                $holdStmt->execute(['ID' => $truckId]);
+                $holdData = $holdStmt->fetch(PDO::FETCH_ASSOC);
+                
+                self::sendResponse([
+                    'success' => false, 
+                    'message' => 'Truck is already on hold.',
+                    'hold_info' => [
+                        'dispatcher_name' => $holdData['hold_dispatcher_name'] ?? 'Unknown',
+                        'dispatcher_id' => $dispatcherId
+                    ]
+                ], 409);
+                return;
+            }
+            
+            ActivityLogger::log('truck_hold_placed', [
+                'truck_id' => $truckId,
+                'truck_number' => $truckNumber,
+                'dispatcher_id' => $dispatcherId,
+                'dispatcher_name' => $dispatcherName
+            ]);
+            
+            self::sendResponse(['success' => true, 'message' => 'Hold placed successfully.']);
+
+        } catch (PDOException $e) {
+            Logger::error('Failed to place hold', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
+            self::sendResponse(['success' => false, 'message' => 'Database error during hold placement.'], 500);
+        }
+    }
+
+    /**
+     * Remove hold from a truck
+     */
+    public static function removeHold($truckId, $dispatcherId)
+    {
+        try {
+            $pdo = Database::getConnection();
+            
+            // Check if truck exists and get hold info
+            $truckStmt = $pdo->prepare("
+                SELECT TruckNumber, hold_status, hold_dispatcher_id, hold_dispatcher_name 
+                FROM Trucks WHERE ID = :ID
+            ");
+            $truckStmt->execute(['ID' => $truckId]);
+            $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$truckData) {
+                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                return;
+            }
+            
+            if ($truckData['hold_status'] !== 'active') {
+                self::sendResponse(['success' => false, 'message' => 'Truck is not on hold.'], 400);
+                return;
+            }
+            
+            // Check if dispatcher can remove the hold
+            if ($truckData['hold_dispatcher_id'] != $dispatcherId) {
+                self::sendResponse(['success' => false, 'message' => 'You can only remove your own holds.'], 403);
+                return;
+            }
+            
+            $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
+            
+            // Remove hold with optimistic locking to prevent race conditions
+            $updateStmt = $pdo->prepare("
+                UPDATE Trucks 
+                SET hold_status = NULL, 
+                    hold_started_at = NULL, 
+                    hold_dispatcher_id = NULL, 
+                    hold_dispatcher_name = NULL
+                WHERE ID = :truck_id AND hold_status = 'active'
+            ");
+            
+            $updateStmt->execute([
+                'truck_id' => $truckId
+            ]);
+            
+            // Check if any rows were actually updated
+            if ($updateStmt->rowCount() === 0) {
+                // Hold was already removed by another request
+                self::sendResponse(['success' => false, 'message' => 'Hold was already removed.'], 409);
+                return;
+            }
+            
+            ActivityLogger::log('truck_hold_removed', [
+                'truck_id' => $truckId,
+                'truck_number' => $truckNumber,
+                'dispatcher_id' => $dispatcherId,
+                'dispatcher_name' => $truckData['hold_dispatcher_name']
+            ]);
+            
+            self::sendResponse(['success' => true, 'message' => 'Hold removed successfully.']);
+
+        } catch (PDOException $e) {
+            Logger::error('Failed to remove hold', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
+            self::sendResponse(['success' => false, 'message' => 'Database error during hold removal.'], 500);
+        }
+    }
+
+    /**
+     * Cleanup expired holds (older than 15 minutes)
+     */
+    public static function cleanupExpiredHolds()
+    {
+        try {
+            $pdo = Database::getConnection();
+            
+            // Find and update expired holds with optimistic locking
+            $updateStmt = $pdo->prepare("
+                UPDATE Trucks 
+                SET hold_status = 'expired'
+                WHERE hold_status = 'active' 
+                AND hold_started_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+            ");
+            
+            $updateStmt->execute();
+            $expiredCount = $updateStmt->rowCount();
+            
+            if ($expiredCount > 0) {
+                Logger::info('Cleaned up expired holds', ['count' => $expiredCount]);
+            }
+            
+            self::sendResponse(['success' => true, 'expired_count' => $expiredCount]);
+
+        } catch (PDOException $e) {
+            Logger::error('Failed to cleanup expired holds', ['error' => $e->getMessage()]);
+            self::sendResponse(['success' => false, 'message' => 'Database error during cleanup.'], 500);
+        }
+    }
+
+    /**
+     * Get hold information for a truck
+     */
+    public static function getHoldInfo($truckId)
+    {
+        try {
+            $pdo = Database::getConnection();
+            
+            $stmt = $pdo->prepare("
+                SELECT hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name
+                FROM Trucks WHERE ID = :ID
+            ");
+            $stmt->execute(['ID' => $truckId]);
+            $holdData = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$holdData) {
+                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                return;
+            }
+            
+            $holdInfo = [
+                'hold_status' => $holdData['hold_status'],
+                'hold_started_at' => $holdData['hold_started_at'],
+                'hold_dispatcher_id' => $holdData['hold_dispatcher_id'],
+                'hold_dispatcher_name' => $holdData['hold_dispatcher_name']
+            ];
+            
+            // Calculate time remaining if on active hold using server time
+            if ($holdData['hold_status'] === 'active' && $holdData['hold_started_at']) {
+                $startTime = new \DateTime($holdData['hold_started_at']);
+                $now = new \DateTime(); // Server time
+                $elapsed = $now->diff($startTime);
+                $elapsedMinutes = ($elapsed->h * 60) + $elapsed->i;
+                $remainingMinutes = max(0, 15 - $elapsedMinutes);
+                
+                $holdInfo['remaining_minutes'] = $remainingMinutes;
+                $holdInfo['elapsed_minutes'] = $elapsedMinutes;
+                $holdInfo['server_time'] = $now->format('Y-m-d H:i:s');
+            }
+            
+            self::sendResponse(['success' => true, 'hold_info' => $holdInfo]);
+
+        } catch (PDOException $e) {
+            Logger::error('Failed to get hold info', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
+            self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
+        }
+    }
+
+    /**
+     * Get server time and hold countdown for all trucks
+     */
+    public static function getServerTimeAndHolds()
+    {
+        try {
+            $pdo = Database::getConnection();
+            
+            // Get current server time
+            $serverTimeStmt = $pdo->query("SELECT NOW() as server_time");
+            $serverTime = $serverTimeStmt->fetch(PDO::FETCH_ASSOC)['server_time'];
+            
+            // Get all active holds with remaining time
+            $holdsStmt = $pdo->prepare("
+                SELECT ID, hold_started_at, hold_dispatcher_id, hold_dispatcher_name
+                FROM Trucks 
+                WHERE hold_status = 'active' AND hold_started_at IS NOT NULL
+            ");
+            $holdsStmt->execute();
+            $activeHolds = $holdsStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $holdsInfo = [];
+            foreach ($activeHolds as $hold) {
+                $startTime = new \DateTime($hold['hold_started_at']);
+                $now = new \DateTime($serverTime);
+                $elapsed = $now->diff($startTime);
+                $elapsedMinutes = ($elapsed->h * 60) + $elapsed->i;
+                $remainingMinutes = max(0, 15 - $elapsedMinutes);
+                
+                $holdsInfo[] = [
+                    'truck_id' => $hold['ID'],
+                    'remaining_minutes' => $remainingMinutes,
+                    'elapsed_minutes' => $elapsedMinutes,
+                    'is_expired' => $remainingMinutes <= 0
+                ];
+            }
+            
+            self::sendResponse([
+                'success' => true, 
+                'server_time' => $serverTime,
+                'holds' => $holdsInfo
+            ]);
+
+        } catch (PDOException $e) {
+            Logger::error('Failed to get server time and holds', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
         }
     }
