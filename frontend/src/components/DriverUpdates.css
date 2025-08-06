@@ -15,7 +15,7 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.header-left {
+.driver-updates-header-left {
     display: flex;
     align-items: center;
     gap: 16px;
@@ -30,7 +30,7 @@
     font-weight: 600;
 }
 
-.header-controls {
+.driver-updates-header-controls {
     display: flex;
     align-items: center;
     gap: 16px;
@@ -411,7 +411,7 @@
 }
 
 /* Buttons */
-.btn {
+.driver-updates-page-btn {
     padding: 6px 12px;
     border: none;
     border-radius: 4px;
@@ -424,35 +424,35 @@
     text-align: center;
 }
 
-.btn-primary {
+.driver-updates-page-btn-primary {
     background: #2563eb;
     color: white;
 }
 
-.btn-primary:hover {
+.driver-updates-page-btn-primary:hover {
     background: #1d4ed8;
 }
 
-.btn-primary:disabled {
+.driver-updates-page-btn-primary:disabled {
     background: #9ca3af;
     cursor: not-allowed;
 }
 
-.btn-secondary {
+.driver-updates-page-btn-secondary {
     background: #6b7280;
     color: white;
 }
 
-.btn-secondary:hover {
+.driver-updates-page-btn-secondary:hover {
     background: #4b5563;
 }
 
-.btn-danger {
+.driver-updates-page-btn-danger {
     background: #dc2626;
     color: white;
 }
 
-.btn-danger:hover {
+.driver-updates-page-btn-danger:hover {
     background: #b91c1c;
 }
 
@@ -465,7 +465,7 @@
 }
 
 /* Modal */
-.modal-overlay {
+.driver-updates-modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -478,7 +478,7 @@
     z-index: 1000;
 }
 
-.modal-content {
+.driver-updates-modal-content {
     background: white;
     border-radius: 8px;
     width: 90%;
@@ -488,7 +488,7 @@
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
 
-.modal-header {
+.driver-updates-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -496,14 +496,14 @@
     border-bottom: 1px solid #e5e7eb;
 }
 
-.modal-header h3 {
+.driver-updates-modal-header h3 {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
     color: #1f2937;
 }
 
-.modal-close {
+.driver-updates-modal-close {
     background: none;
     border: none;
     font-size: 24px;
@@ -517,12 +517,20 @@
     justify-content: center;
 }
 
-.modal-close:hover {
+.driver-updates-modal-close:hover {
     color: #374151;
 }
 
-.modal-body {
+.driver-updates-modal-body {
     padding: 20px;
+}
+
+.driver-updates-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px;
+    border-top: 1px solid #e5e7eb;
 }
 
 .selected-driver-info {
@@ -668,11 +676,11 @@
         padding: 4px 8px;
     }
     
-    .header-left {
+    .driver-updates-header-left {
         justify-content: space-between;
     }
     
-    .header-controls {
+    .driver-updates-header-controls {
         justify-content: center;
     }
     
@@ -701,7 +709,7 @@
         max-width: 120px;
     }
     
-    .actions-cell .btn {
+    .actions-cell .driver-updates-page-btn {
         padding: 2px 6px;
         font-size: 11px;
         margin-right: 4px;
@@ -712,7 +720,7 @@
         min-width: 80px; /* Adjusted for mobile */
     }
     
-    .modal-content {
+    .driver-updates-modal-content {
         width: 95%;
         margin: 10px;
     }
@@ -746,7 +754,7 @@
         font-size: 12px;
     }
     
-    .modal-footer {
+    .driver-updates-modal-footer {
         flex-direction: column;
         gap: 8px;
     }
@@ -757,5 +765,334 @@
         padding: 10px 16px;
         font-size: 0.9rem;
         height: 40px;
+    }
+}
+
+/* Driver Updates Heatmap Styles */
+.driver-heatmap-tab {
+    padding: 12px;
+}
+
+.driver-heatmap-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+}
+
+.driver-heatmap-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.driver-heatmap-controls label {
+    font-weight: 500;
+    color: #374151;
+    font-size: 14px;
+}
+
+.driver-month-selector {
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+    background: white;
+    font-size: 14px;
+    color: #374151;
+}
+
+.driver-heatmap-legend {
+    display: flex;
+    gap: 12px;
+}
+
+.driver-heatmap-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.driver-heatmap-legend-color {
+    width: 12px;
+    height: 12px;
+    border: 1px solid #d1d5db;
+}
+
+.driver-heatmap-container {
+    background: white;
+    border: 1px solid #d1d5db;
+    overflow: hidden;
+}
+
+.driver-heatmap-info {
+    padding: 6px 12px;
+    background: #f9fafb;
+    border-bottom: 1px solid #d1d5db;
+}
+
+.driver-heatmap-sorting-info {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.driver-sorting-indicator {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+    background: #e5e7eb;
+    padding: 3px 8px;
+}
+
+.driver-heatmap-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 400px;
+}
+
+.driver-heatmap-header-row {
+    display: flex;
+    background: #f3f4f6;
+    border-bottom: 1px solid #d1d5db;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.driver-heatmap-truck-header,
+.driver-heatmap-driver-header,
+.driver-heatmap-day-header {
+    padding: 6px 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    border-right: 1px solid #d1d5db;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.driver-heatmap-truck-header {
+    min-width: 60px;
+    background: #f3f4f6;
+}
+
+.driver-heatmap-driver-header {
+    min-width: 120px;
+    background: #f3f4f6;
+}
+
+.driver-heatmap-day-header.today {
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-weight: 700;
+}
+
+.driver-heatmap-day-header.weekend {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.driver-heatmap-row {
+    display: flex;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.driver-heatmap-truck-number,
+.driver-heatmap-driver-name,
+.driver-heatmap-cell {
+    padding: 4px;
+    font-size: 12px;
+    text-align: center;
+    border-right: 1px solid #e5e7eb;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.driver-heatmap-truck-number {
+    min-width: 60px;
+    background: #f9fafb;
+    font-weight: 600;
+    color: #374151;
+}
+
+.driver-heatmap-driver-name {
+    min-width: 120px;
+    background: #f9fafb;
+    color: #6b7280;
+    text-align: left;
+    justify-content: flex-start;
+}
+
+.driver-heatmap-truck-number-text {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.driver-heatmap-total-updates {
+    font-size: 10px;
+    color: #6b7280;
+    margin-left: 3px;
+    font-weight: 500;
+}
+
+.driver-heatmap-driver-name-text {
+    color: #374151;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+}
+
+.driver-heatmap-cell {
+    position: relative;
+}
+
+.driver-heatmap-cell.today {
+    border: 1px solid #3b82f6;
+}
+
+.driver-heatmap-cell.future {
+    background: #f9fafb !important;
+    color: #9ca3af;
+}
+
+.driver-heatmap-cell-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+}
+
+.driver-heatmap-updates {
+    font-size: 9px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+/* Mobile responsive for driver heatmap */
+@media (max-width: 768px) {
+    .driver-heatmap-header {
+        flex-direction: column;
+        gap: 6px;
+        align-items: stretch;
+    }
+    
+    .driver-heatmap-controls {
+        justify-content: center;
+    }
+    
+    .driver-heatmap-legend {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .driver-heatmap-info {
+        padding: 4px 8px;
+    }
+    
+    .driver-sorting-indicator {
+        font-size: 11px;
+        padding: 2px 6px;
+    }
+    
+    .driver-heatmap-truck-header,
+    .driver-heatmap-driver-header,
+    .driver-heatmap-day-header {
+        min-width: 28px;
+        font-size: 11px;
+        padding: 4px 2px;
+    }
+    
+    .driver-heatmap-truck-number,
+    .driver-heatmap-driver-name,
+    .driver-heatmap-cell {
+        min-width: 28px;
+        font-size: 11px;
+        padding: 3px 2px;
+    }
+    
+    .driver-heatmap-truck-number {
+        min-width: 50px;
+    }
+    
+    .driver-heatmap-driver-name {
+        min-width: 100px;
+    }
+    
+    .driver-heatmap-driver-name-text {
+        max-width: 90px;
+    }
+    
+    .driver-heatmap-total-updates {
+        font-size: 9px;
+        margin-left: 2px;
+    }
+    
+    .driver-heatmap-updates {
+        font-size: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .driver-heatmap-tab {
+        padding: 8px;
+    }
+    
+    .driver-heatmap-header {
+        padding: 6px;
+    }
+    
+    .driver-heatmap-info {
+        padding: 3px 6px;
+    }
+    
+    .driver-sorting-indicator {
+        font-size: 10px;
+        padding: 2px 4px;
+    }
+    
+    .driver-heatmap-truck-header,
+    .driver-heatmap-driver-header,
+    .driver-heatmap-day-header {
+        min-width: 24px;
+        font-size: 10px;
+        padding: 3px 1px;
+    }
+    
+    .driver-heatmap-truck-number,
+    .driver-heatmap-driver-name,
+    .driver-heatmap-cell {
+        min-width: 24px;
+        font-size: 10px;
+        padding: 2px 1px;
+    }
+    
+    .driver-heatmap-truck-number {
+        min-width: 45px;
+    }
+    
+    .driver-heatmap-driver-name {
+        min-width: 90px;
+    }
+    
+    .driver-heatmap-driver-name-text {
+        max-width: 80px;
+    }
+    
+    .driver-heatmap-total-updates {
+        font-size: 8px;
+        margin-left: 1px;
+    }
+    
+    .driver-heatmap-updates {
+        font-size: 7px;
     }
 }

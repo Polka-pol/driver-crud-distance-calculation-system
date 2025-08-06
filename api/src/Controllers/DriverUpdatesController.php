@@ -7,6 +7,7 @@ use App\Core\Auth;
 use App\Core\Logger;
 use PDO;
 use Exception;
+use DateTime;
 
 class DriverUpdatesController
 {
@@ -516,6 +517,168 @@ class DriverUpdatesController
             self::sendResponse([
                 'success' => false, 
                 'message' => 'Could not auto-update driver statuses'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get driver updates heatmap data
+     */
+    public static function getDriverUpdatesHeatmap()
+    {
+        try {
+            $pdo = Database::getConnection();
+            $currentUser = Auth::getCurrentUser();
+            
+            // Get query parameters
+            $view = $_GET['view'] ?? 'my'; // 'my', 'all', or 'unassigned'
+            $month = $_GET['month'] ?? date('Y-m');
+            
+            // Parse month and year
+            $date = DateTime::createFromFormat('Y-m', $month);
+            if (!$date) {
+                $date = new DateTime();
+            }
+            
+            $year = $date->format('Y');
+            $monthNum = $date->format('m');
+            $monthName = $date->format('F');
+            
+            // Get all days in the month
+            $daysInMonth = $date->format('t');
+            $monthDays = [];
+            
+            for ($day = 1; $day <= $daysInMonth; $day++) {
+                $currentDate = DateTime::createFromFormat('Y-m-d', "$year-$monthNum-" . sprintf('%02d', $day));
+                $monthDays[] = [
+                    'date' => $currentDate->format('Y-m-d'),
+                    'day' => $day,
+                    'is_today' => $currentDate->format('Y-m-d') === date('Y-m-d'),
+                    'is_weekend' => in_array($currentDate->format('N'), ['6', '7']),
+                    'is_future' => $currentDate->format('Y-m-d') > date('Y-m-d')
+                ];
+            }
+            
+            // Get all trucks for the view
+            $sql = "
+                SELECT 
+                    ID,
+                    TruckNumber,
+                    DriverName,
+                    assigned_dispatcher_id,
+                    updated_at
+                FROM Trucks 
+                WHERE 1=1
+            ";
+            
+            $params = [];
+            
+            // Filter by dispatcher based on view
+            if ($view === 'my' && $currentUser) {
+                $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
+                $params['dispatcher_id'] = $currentUser->id;
+            } elseif ($view === 'unassigned') {
+                $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
+            }
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $trucks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Get activity logs for truck updates in the specified month
+            $startDate = "$year-$monthNum-01";
+            $endDate = "$year-$monthNum-$daysInMonth";
+            
+            $activitySql = "
+                SELECT 
+                    al.details,
+                    al.created_at,
+                    al.user_id,
+                    u.full_name,
+                    u.username
+                FROM activity_logs al
+                LEFT JOIN users u ON al.user_id = u.id
+                WHERE al.action = 'truck_updated'
+                AND DATE(al.created_at) BETWEEN :start_date AND :end_date
+            ";
+            
+            $activityStmt = $pdo->prepare($activitySql);
+            $activityStmt->execute([
+                'start_date' => $startDate,
+                'end_date' => $endDate
+            ]);
+            $activities = $activityStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Process activities to count updates per day per truck
+            $truckDailyUpdates = [];
+            
+            foreach ($activities as $activity) {
+                $details = json_decode($activity['details'], true);
+                if ($details && isset($details['truck_id'])) {
+                    $truckId = $details['truck_id'];
+                    $date = date('Y-m-d', strtotime($activity['created_at']));
+                    
+                    if (!isset($truckDailyUpdates[$truckId])) {
+                        $truckDailyUpdates[$truckId] = [];
+                    }
+                    if (!isset($truckDailyUpdates[$truckId][$date])) {
+                        $truckDailyUpdates[$truckId][$date] = 0;
+                    }
+                    $truckDailyUpdates[$truckId][$date]++;
+                }
+            }
+            
+            // Create heatmap data structure
+            $heatmapData = [
+                'month_name' => $monthName,
+                'year' => $year,
+                'month_days' => $monthDays,
+                'truck_data' => []
+            ];
+            
+            foreach ($trucks as $truck) {
+                $dailyStats = [];
+                $totalUpdates = 0; // Додаємо лічильник загальних оновлень
+                
+                foreach ($monthDays as $day) {
+                    $date = $day['date'];
+                    $updates = isset($truckDailyUpdates[$truck['ID']][$date]) ? $truckDailyUpdates[$truck['ID']][$date] : 0;
+                    $totalUpdates += $updates; // Підраховуємо загальну кількість
+                    
+                    $dailyStats[$date] = [
+                        'updates' => $updates,
+                        'has_update' => $updates > 0
+                    ];
+                }
+                
+                $heatmapData['truck_data'][] = [
+                    'id' => $truck['ID'],
+                    'truck_number' => $truck['TruckNumber'],
+                    'driver_name' => $truck['DriverName'],
+                    'assigned_dispatcher_id' => $truck['assigned_dispatcher_id'],
+                    'daily_stats' => $dailyStats,
+                    'total_updates' => $totalUpdates // Додаємо загальну кількість оновлень
+                ];
+            }
+            
+            // Сортуємо водіїв за кількістю оновлень від більшого до меншого
+            usort($heatmapData['truck_data'], function($a, $b) {
+                return $b['total_updates'] - $a['total_updates'];
+            });
+            
+            self::sendResponse([
+                'success' => true,
+                'heatmap_data' => $heatmapData
+            ]);
+
+        } catch (Exception $e) {
+            Logger::error('Failed to get driver updates heatmap', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            self::sendResponse([
+                'success' => false, 
+                'message' => 'Could not retrieve heatmap data'
             ], 500);
         }
     }

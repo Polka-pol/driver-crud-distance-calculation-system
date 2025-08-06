@@ -14,6 +14,8 @@ const DriverUpdates = ({ onBack, user }) => {
         no_need_update: []
     });
     const [monthlyDrivers, setMonthlyDrivers] = useState([]);
+    const [heatmapData, setHeatmapData] = useState(null);
+    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
     const [isLoading, setIsLoading] = useState(true);
     const [isAutoUpdating, setIsAutoUpdating] = useState(false);
     const [autoUpdateResult, setAutoUpdateResult] = useState(null);
@@ -80,10 +82,30 @@ const DriverUpdates = ({ onBack, user }) => {
         }
     }, [activeTab, view, autoUpdateDriverStatuses]);
 
+    const loadHeatmapData = useCallback(async () => {
+        try {
+            const response = await apiClient(`${API_BASE_URL}/driver-updates/heatmap?view=${view}&month=${selectedMonth}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                setHeatmapData(data.heatmap_data);
+            } else {
+                setError(data.message || 'Failed to load heatmap data');
+            }
+        } catch (err) {
+            console.error('Error loading heatmap data:', err);
+            setError('Error loading heatmap data');
+        }
+    }, [view, selectedMonth]);
+
     // Load data when component mounts or parameters change
     useEffect(() => {
-        loadDriverStatuses();
-    }, [activeTab, view, loadDriverStatuses]);
+        if (activeTab === 'heatmap') {
+            loadHeatmapData();
+        } else {
+            loadDriverStatuses();
+        }
+    }, [activeTab, view, loadDriverStatuses, loadHeatmapData]);
 
     const openModal = useCallback((truck) => {
         setSelectedTruck(truck);
@@ -206,6 +228,12 @@ const DriverUpdates = ({ onBack, user }) => {
         }
     }, []);
 
+    const getUpdateStatusColor = useCallback((hasUpdate) => {
+        return hasUpdate ? '#22c55e' : '#e5e7eb'; // Green for updated, gray for not updated
+    }, []);
+
+
+
     const DriversTable = useCallback(({ drivers, category, showActions = true }) => {
         // Sort drivers for monthly review (oldest first)
         const sortedDrivers = category === 'monthly_review' && drivers.length > 0 && drivers[0].hasOwnProperty('WhenWillBeThere') 
@@ -292,7 +320,7 @@ const DriverUpdates = ({ onBack, user }) => {
                                             <td className="actions-cell">
                                                 {category === 'need_update' && canSetNoUpdate(driver) && (
                                                     <button 
-                                                        className="btn btn-primary"
+                                                        className="driver-updates-page-btn driver-updates-page-btn-primary"
                                                         onClick={() => openModal(driver)}
                                                     >
                                                         Set No Update
@@ -300,7 +328,7 @@ const DriverUpdates = ({ onBack, user }) => {
                                                 )}
                                                 {category === 'monthly_review' && (
                                                     <button 
-                                                        className="btn btn-danger"
+                                                        className="driver-updates-page-btn driver-updates-page-btn-danger"
                                                         onClick={() => handleDeleteDriver(driver)}
                                                     >
                                                         Delete
@@ -311,13 +339,13 @@ const DriverUpdates = ({ onBack, user }) => {
                                                         {canSetNoUpdate(driver) && (
                                                             <>
                                                                 <button 
-                                                                    className="btn btn-secondary"
+                                                                    className="driver-updates-page-btn driver-updates-page-btn-secondary"
                                                                     onClick={() => handleClearStatus(driver)}
                                                                 >
                                                                     Clear
                                                                 </button>
                                                                 <button 
-                                                                    className="btn btn-primary"
+                                                                    className="driver-updates-page-btn driver-updates-page-btn-primary"
                                                                     onClick={() => openModal(driver)}
                                                                 >
                                                                     Edit
@@ -401,14 +429,106 @@ const DriverUpdates = ({ onBack, user }) => {
         </div>
     ), [monthlyDrivers]);
 
+    const HeatmapTab = useCallback(() => (
+        <div className="driver-heatmap-tab">
+            <div className="driver-heatmap-header">
+                <div className="driver-heatmap-controls">
+                    <label>Month:</label>
+                    <input 
+                        type="month" 
+                        value={selectedMonth} 
+                        onChange={(e) => setSelectedMonth(e.target.value)}
+                        className="driver-month-selector"
+                    />
+                </div>
+                <div className="driver-heatmap-legend">
+                    <div className="driver-heatmap-legend-item">
+                        <div className="driver-heatmap-legend-color" style={{backgroundColor: '#22c55e'}}></div>
+                        <span>Updated</span>
+                    </div>
+                    <div className="driver-heatmap-legend-item">
+                        <div className="driver-heatmap-legend-color" style={{backgroundColor: '#e5e7eb'}}></div>
+                        <span>Not Updated</span>
+                    </div>
+                </div>
+            </div>
+
+            {heatmapData && (
+                <div className="driver-heatmap-container">
+                    <div className="driver-heatmap-info">
+                        <div className="driver-heatmap-sorting-info">
+                            <span className="driver-sorting-indicator">📊 Sorted by total updates (highest to lowest)</span>
+                        </div>
+                    </div>
+                    <div className="driver-heatmap-scroll">
+                        {/* Header with day numbers */}
+                        <div className="driver-heatmap-header-row">
+                            <div className="driver-heatmap-truck-header">Truck #</div>
+                            <div className="driver-heatmap-driver-header">Driver</div>
+                            {heatmapData.month_days.map(day => (
+                                <div 
+                                    key={day.date} 
+                                    className={`driver-heatmap-day-header ${day.is_today ? 'today' : ''} ${day.is_weekend ? 'weekend' : ''}`}
+                                    title={day.date}
+                                >
+                                    {day.day}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Heatmap rows for each truck */}
+                        {heatmapData.truck_data.map((truck, truckIndex) => (
+                            <div key={truck.id} className="driver-heatmap-row">
+                                <div className="driver-heatmap-truck-number">
+                                    <span className="driver-heatmap-truck-number-text">
+                                        #{truck.truck_number}
+                                    </span>
+                                    <span className="driver-heatmap-total-updates">
+                                        ({truck.total_updates})
+                                    </span>
+                                </div>
+                                <div className="driver-heatmap-driver-name">
+                                    <span className="driver-heatmap-driver-name-text">
+                                        {truck.driver_name || 'No driver assigned'}
+                                    </span>
+                                </div>
+                                {heatmapData.month_days.map(day => {
+                                    const dayStats = truck.daily_stats[day.date] || {updates: 0, has_update: false};
+                                    
+                                    return (
+                                        <div 
+                                            key={day.date}
+                                            className={`driver-heatmap-cell ${day.is_today ? 'today' : ''} ${day.is_future ? 'future' : ''}`}
+                                            style={{
+                                                backgroundColor: day.is_future ? '#f8fafc' : getUpdateStatusColor(dayStats.has_update),
+                                                opacity: day.is_future ? 0.4 : 1
+                                            }}
+                                            title={`Truck #${truck.truck_number}\n${truck.driver_name || 'No driver assigned'}\n${day.date}\nUpdates: ${dayStats.updates}`}
+                                        >
+                                            {!day.is_future && (
+                                                <div className="driver-heatmap-cell-content">
+                                                    <span className="driver-heatmap-updates">{dayStats.updates}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    ), [heatmapData, selectedMonth, getUpdateStatusColor]);
+
     return (
         <div className="driver-updates-page">
             <div className="page-header">
-                <div className="header-left">
+                <div className="driver-updates-header-left">
                     <h2>Driver Updates</h2>
                 </div>
                 
-                <div className="header-controls">
+                <div className="driver-updates-header-controls">
                     <div className="view-selector">
                         <label>View:</label>
                         <select value={view} onChange={(e) => setView(e.target.value)}>
@@ -436,6 +556,12 @@ const DriverUpdates = ({ onBack, user }) => {
                         onClick={() => setActiveTab('monthly')}
                     >
                         Monthly Review
+                    </button>
+                    <button 
+                        className={`tab ${activeTab === 'heatmap' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('heatmap')}
+                    >
+                        Heatmap
                     </button>
                 </div>
             </div>
@@ -467,6 +593,7 @@ const DriverUpdates = ({ onBack, user }) => {
                     <>
                         {activeTab === 'daily' && <DailyUpdatesTab />}
                         {activeTab === 'monthly' && <MonthlyReviewTab />}
+                        {activeTab === 'heatmap' && <HeatmapTab />}
                     </>
                 )}
             </div>

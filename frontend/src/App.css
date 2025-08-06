@@ -925,8 +925,22 @@ h1 {
   gap: 8px;
 }
 
-/* Header Buttons */
+/* Unified header button styles with color variables */
 .header-btn {
+  --btn-primary: #3b82f6;
+  --btn-primary-dark: #2563eb;
+  --btn-secondary: #6b7280;
+  --btn-secondary-dark: #4b5563;
+  --btn-success: #10b981;
+  --btn-success-dark: #059669;
+  --btn-purple: #8b5cf6;
+  --btn-purple-dark: #7c3aed;
+  --btn-gray: #f1f5f9;
+  --btn-gray-dark: #e2e8f0;
+  --btn-text-light: #ffffff;
+  --btn-text-dark: #475569;
+  --btn-text-dark-hover: #334155;
+  
   display: flex;
   align-items: center;
   gap: 6px;
@@ -939,28 +953,112 @@ h1 {
   transition: all 0.2s ease;
   text-decoration: none;
   min-height: 36px;
+  background: linear-gradient(135deg, var(--btn-primary), var(--btn-primary-dark));
+  color: var(--btn-text-light);
 }
 
-.new-driver-btn {
+.header-btn:hover {
+  background: linear-gradient(135deg, var(--btn-primary-dark), #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Map button - Purple */
+.map-btn {
+  --btn-primary: #8b5cf6;
+  --btn-primary-dark: #7c3aed;
+}
+
+.map-btn:hover {
+  background: linear-gradient(135deg, var(--btn-primary-dark), #6d28d9);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+/* Dispatcher button - Blue */
+.dispatcher-btn {
+  --btn-primary: #3b82f6;
+  --btn-primary-dark: #2563eb;
+}
+
+.dispatcher-btn:hover {
+  background: linear-gradient(135deg, var(--btn-primary-dark), #1d4ed8);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Driver Updates button - Green */
+.driver-updates-btn {
+  --btn-primary: #10b981;
+  --btn-primary-dark: #059669;
+}
+
+.driver-updates-btn:hover {
+  background: linear-gradient(135deg, var(--btn-primary-dark), #047857);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Logout button - Gray */
+.logout-btn {
+  --btn-primary: #f1f5f9;
+  --btn-primary-dark: #e2e8f0;
+  background: var(--btn-primary);
+  color: var(--btn-text-dark);
+  border: 1px solid var(--btn-gray-dark);
+}
+
+.logout-btn:hover {
+  background: var(--btn-primary-dark);
+  color: var(--btn-text-dark-hover);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* New Driver Modal */
+.new-driver-modal {
+  max-width: 400px;
+  text-align: center;
+}
+
+.new-driver-modal h2 {
+  color: #1e293b;
+  margin-bottom: 16px;
+  font-size: 1.25rem;
+}
+
+.new-driver-modal p {
+  color: #64748b;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.modal-actions {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.875rem;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* modal-actions admin-btn styles moved to AdminPanel.css to avoid conflicts */
+
+@media (max-width: 480px) {
+  .modal-actions {
+    flex-direction: column;
+  }
+  
+  .modal-actions .admin-btn,
+  .modal-actions .reset-btn {
+    width: 100%;
+  }
+}
+
+/* New Driver button - Green */
+.new-driver-btn {
+  --btn-primary: #10b981;
+  --btn-primary-dark: #059669;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
-  min-height: 36px;
 }
 
 .new-driver-btn:hover {
-  background: linear-gradient(135deg, #059669, #047857);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, var(--btn-primary-dark), #047857);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
@@ -972,39 +1070,15 @@ h1 {
 
 /* admin-btn styles moved to AdminPanel.css to avoid conflicts */
 
-.map-btn {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  color: white;
+/* Admin button - Red/Orange */
+.admin-btn {
+  --btn-primary: #ef4444;
+  --btn-primary-dark: #dc2626;
 }
 
-.map-btn:hover {
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-}
-
-.dispatcher-btn {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-}
-
-.dispatcher-btn:hover {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
-.logout-btn {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-}
-
-.logout-btn:hover {
-  background: #e2e8f0;
-  color: #334155;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.admin-btn:hover {
+  background: linear-gradient(135deg, var(--btn-primary-dark), #b91c1c);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 /* Mobile Responsiveness for Floating Menu */
@@ -1032,8 +1106,6 @@ h1 {
     font-size: 0.8rem;
     min-height: 44px;
   }
-  
-
 }
 
 @media (max-width: 480px) {
@@ -1066,7 +1138,7 @@ h1 {
   .floating-selection-menu .action-buttons .reset-btn {
     padding: 10px 6px;
     font-size: 0.75rem;
-        min-height: 40px;
+    min-height: 40px;
   }
 }
 
@@ -1135,44 +1207,6 @@ h1 {
 
   .header-right {
     gap: 8px;
-  }
-}
-
-/* New Driver Modal */
-.new-driver-modal {
-  max-width: 400px;
-  text-align: center;
-}
-
-.new-driver-modal h2 {
-  color: #1e293b;
-  margin-bottom: 16px;
-  font-size: 1.25rem;
-}
-
-.new-driver-modal p {
-  color: #64748b;
-  margin-bottom: 24px;
-  line-height: 1.5;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-/* modal-actions admin-btn styles moved to AdminPanel.css to avoid conflicts */
-
-@media (max-width: 480px) {
-  .modal-actions {
-    flex-direction: column;
-  }
-  
-  .modal-actions .admin-btn,
-  .modal-actions .reset-btn {
-    width: 100%;
   }
 }
 

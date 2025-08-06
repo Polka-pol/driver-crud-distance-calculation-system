@@ -667,7 +667,7 @@ function App() {
               </div>
             )}
             <div className="header-actions">
-              <button onClick={() => setShowNewDriverModal(true)} className="new-driver-btn">
+              <button onClick={() => setShowNewDriverModal(true)} className="header-btn new-driver-btn">
                 <span className="btn-icon">+</span>
                 <span className="btn-text">New Driver</span>
               </button>

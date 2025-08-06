@@ -534,6 +534,13 @@ if ($apiRoute === '/driver-updates/auto-update' && $requestMethod === 'POST') {
     exit();
 }
 
+// Get driver updates heatmap data
+if ($apiRoute === '/driver-updates/heatmap' && $requestMethod === 'GET') {
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    DriverUpdatesController::getDriverUpdatesHeatmap();
+    exit();
+}
+
 // === EXTENDED ROUTES FOR MOBILE APP ===
 
 // List of available offers for driver

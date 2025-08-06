@@ -48,14 +48,14 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
+        <div className="driver-updates-modal-overlay" onClick={onClose}>
+            <div className="driver-updates-modal-content" onClick={e => e.stopPropagation()}>
+                <div className="driver-updates-modal-header">
                     <h3>Update Driver Status</h3>
-                    <button className="modal-close" onClick={onClose}>×</button>
+                    <button className="driver-updates-modal-close" onClick={onClose}>×</button>
                 </div>
                 
-                <div className="modal-body">
+                <div className="driver-updates-modal-body">
                     {truck && (
                         <div className="selected-driver-info">
                             <strong>#{truck.TruckNumber || truck.truck_no} - {truck.DriverName || truck.driver_name}</strong>
@@ -105,7 +105,7 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
                     </div>
                 </div>
                 
-                <div className="modal-footer">
+                <div className="driver-updates-modal-footer">
                     <button className="cancel-btn" onClick={onClose}>
                         Cancel
                     </button>
