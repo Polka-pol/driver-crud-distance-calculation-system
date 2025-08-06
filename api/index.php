@@ -41,6 +41,7 @@ use App\Controllers\DashboardController;
 use App\Controllers\DispatcherDashboardController;
 use App\Controllers\DriverController;
 use App\Controllers\LoadOfferController;
+use App\Controllers\DriverUpdatesController;
 use App\Core\Auth;
 
 // --- Headers ---
@@ -345,6 +346,13 @@ if (preg_match('/^\/users\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 
     exit();
 }
 
+// Get Dispatchers Route (Protected for dispatchers, managers, admins)
+if ($apiRoute === '/users/dispatchers' && $requestMethod === 'GET') {
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    UserController::getDispatchers();
+    exit();
+}
+
 // Analytics Route (Protected)
 if ($apiRoute === '/dashboard/analytics' && $requestMethod === 'GET') {
     Auth::protect(['manager', 'admin']);
@@ -491,6 +499,38 @@ if ($apiRoute === '/distances/cache-stats' && $requestMethod === 'GET') {
 // Clear distance cache
 if ($apiRoute === '/distances/cache-cleanup' && $requestMethod === 'POST') {
     (new DistanceController())->cleanupCache();
+    exit();
+}
+
+// === DRIVER UPDATES ROUTES ===
+
+// Get driver update statuses (Daily Updates and Monthly Review)
+if ($apiRoute === '/driver-updates/status' && $requestMethod === 'GET') {
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    DriverUpdatesController::getDriverStatuses();
+    exit();
+}
+
+// Update driver no_need_update status
+if (preg_match('/^\/trucks\/(\d+)\/update-no-need-status$/', $apiRoute, $matches) && $requestMethod === 'POST') {
+    $truckId = (int)$matches[1];
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    DriverUpdatesController::updateNoNeedStatus($truckId);
+    exit();
+}
+
+// Clear driver no_need_update status
+if (preg_match('/^\/trucks\/(\d+)\/clear-no-need-status$/', $apiRoute, $matches) && $requestMethod === 'POST') {
+    $truckId = (int)$matches[1];
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    DriverUpdatesController::clearNoNeedStatus($truckId);
+    exit();
+}
+
+// Auto-update driver statuses when page loads
+if ($apiRoute === '/driver-updates/auto-update' && $requestMethod === 'POST') {
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    DriverUpdatesController::autoUpdateDriverStatuses();
     exit();
 }
 

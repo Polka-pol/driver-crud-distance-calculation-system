@@ -12,6 +12,7 @@ import Pagination from './components/Pagination';
 import LoginPage from './components/LoginPage';
 import AdminPage from './components/AdminPage';
 import DispatcherDashboard from './components/DispatcherDashboard';
+import DriverUpdates from './components/DriverUpdates';
 import MapPage from './components/MapPage';
 import { isAuthenticated, logout, getCurrentUser } from './utils/auth';
 import { apiClient } from './utils/apiClient';
@@ -281,7 +282,11 @@ function App() {
           const originalValue = originalTruck[key] || '';
           const editedValue = editedTruck[key] || '';
           
-          if (originalValue !== editedValue) {
+          // Convert to string for comparison to handle number/string mismatches
+          const originalStr = String(originalValue);
+          const editedStr = String(editedValue);
+          
+          if (originalStr !== editedStr) {
             changedFields[key] = editedValue;
           }
         });
@@ -386,6 +391,26 @@ function App() {
 
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleSetNoUpdate = async (truckId, modalData) => {
+    try {
+      const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/update-no-need-status`, {
+        method: 'POST',
+        body: JSON.stringify(modalData)
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        // Refresh truck data to show updated status
+        await handleManualRefresh();
+      } else {
+        alert(data.message || 'Failed to update status');
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Error updating status');
     }
   };
 
@@ -652,6 +677,9 @@ function App() {
               <button onClick={() => setView('dispatcher')} className="header-btn dispatcher-btn">
                 <span className="btn-text">Activity</span>
               </button>
+              <button onClick={() => setView('driver-updates')} className="header-btn driver-updates-btn">
+                <span className="btn-text">Driver Updates</span>
+              </button>
               {(user?.role === 'manager' || user?.role === 'admin') && (
                 <button onClick={() => setView('admin')} className="header-btn admin-btn">
                   <span className="btn-text">Admin</span>
@@ -790,15 +818,17 @@ function App() {
         {editModal && (
           <EditModal
             editedTruck={editedTruck}
-                userRole={user?.role}
+            userRole={user?.role}
+            user={user}
             onClose={() => {
               setEditModal(null);
               setEditedTruck(null);
               setOriginalTruck(null);
             }}
             onSave={handleEditSubmit}
-                onDelete={handleDelete}
+            onDelete={handleDelete}
             onChange={handleEditChange}
+            onSetNoUpdate={handleSetNoUpdate}
           />
         )}
 
@@ -824,6 +854,8 @@ function App() {
           <AdminPage onBack={() => setView('main')} user={user} />
         ) : view === 'dispatcher' ? (
           <DispatcherDashboard onBack={() => setView('main')} user={user} />
+        ) : view === 'driver-updates' ? (
+          <DriverUpdates onBack={() => setView('main')} user={user} />
         ) : view === 'map' ? (
           <MapPage onBack={() => setView('main')} user={user} />
         ) : null}

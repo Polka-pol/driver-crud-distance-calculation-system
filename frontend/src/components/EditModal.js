@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
 import { FaRegCalendarAlt } from "react-icons/fa";
 import AddressSearchBar from './AddressSearchBar';
 import { useModalScrollLock } from '../utils/modalScrollLock';
+import UpdateStatusModal from './UpdateStatusModal';
+import { apiClient } from '../utils/apiClient';
+import { API_BASE_URL } from '../config';
 import './EditModal.css';
 
 const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
@@ -35,15 +38,43 @@ const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
 const EditModal = ({ 
   editedTruck, 
   userRole,
+  user,
   onClose, 
   onSave, 
   onDelete, 
-  onChange 
+  onChange,
+  onSetNoUpdate
 }) => {
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
+  const [showNoUpdateModal, setShowNoUpdateModal] = useState(false);
+  const [dispatchers, setDispatchers] = useState([]);
+  const [isLoadingDispatchers, setIsLoadingDispatchers] = useState(false);
 
   // Prevent body scroll when modal is open
   useModalScrollLock(!!editedTruck);
+
+  // Fetch dispatchers when modal opens
+  useEffect(() => {
+    if (editedTruck) {
+      fetchDispatchers();
+    }
+  }, [editedTruck]);
+
+  const fetchDispatchers = async () => {
+    try {
+      setIsLoadingDispatchers(true);
+      const response = await apiClient(`${API_BASE_URL}/users/dispatchers`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch dispatchers');
+      }
+      const data = await response.json();
+      setDispatchers(data);
+    } catch (error) {
+      console.error('Error fetching dispatchers:', error);
+    } finally {
+      setIsLoadingDispatchers(false);
+    }
+  };
 
   // Phone number formatting function
   const formatPhoneNumber = (value) => {
@@ -68,6 +99,27 @@ const EditModal = ({
     onChange(field, formattedValue);
   };
 
+  const handleSetNoUpdate = (modalData) => {
+    if (onSetNoUpdate) {
+      onSetNoUpdate(editedTruck.id || editedTruck.ID, modalData);
+    }
+    setShowNoUpdateModal(false);
+  };
+
+  const openNoUpdateModal = () => {
+    setShowNoUpdateModal(true);
+  };
+
+  // Check if user has permission to set no update
+  const canSetNoUpdate = () => {
+    // Admin, manager, and dispatcher can always set no update
+    if (userRole === 'admin' || userRole === 'manager' || userRole === 'dispatcher') {
+      return true;
+    }
+    
+    return false;
+  };
+
   if (!editedTruck) return null;
 
   return (
@@ -78,6 +130,24 @@ const EditModal = ({
       }}>
         <div className="modal-header">
           <h2>Edit Driver Information</h2>
+          
+          {/* Assigned Dispatcher Dropdown */}
+          <div className="assigned-dispatcher-section">
+            <label>Assigned Dispatcher:</label>
+            <select
+              value={String(editedTruck.assigned_dispatcher_id || '')}
+              onChange={e => onChange('assigned_dispatcher_id', e.target.value)}
+              className="dispatcher-select"
+              disabled={isLoadingDispatchers}
+            >
+              <option value="">Select Dispatcher</option>
+              {dispatchers.map(dispatcher => (
+                <option key={dispatcher.id} value={dispatcher.id}>
+                  {dispatcher.full_name || dispatcher.username}
+                </option>
+              ))}
+            </select>
+          </div>
           
           {/* Last Modified Information - Compact */}
           {(editedTruck.updated_by || editedTruck.updated_at) && (
@@ -269,6 +339,9 @@ const EditModal = ({
           <div className="edit-form-actions">
             <div className="left-actions">
               <button onClick={() => onDelete(editedTruck.id)} className="delete-btn">Delete</button>
+              {canSetNoUpdate() && (
+                <button onClick={openNoUpdateModal} className="btn btn-primary">Set No Update</button>
+              )}
             </div>
             <div className="right-actions">
               <button onClick={onClose} className="cancel-btn">Cancel</button>
@@ -277,6 +350,18 @@ const EditModal = ({
           </div>
         </div>
       </div>
+
+      <UpdateStatusModal
+        show={showNoUpdateModal}
+        onClose={() => setShowNoUpdateModal(false)}
+        truck={{
+          ...editedTruck,
+          ID: editedTruck.id,
+          TruckNumber: editedTruck.truck_no,
+          DriverName: editedTruck.driver_name
+        }}
+        onSave={handleSetNoUpdate}
+      />
     </div>
   );
 };

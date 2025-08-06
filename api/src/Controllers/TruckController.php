@@ -36,7 +36,8 @@ class TruckController
                     DriverName, contactphone, CellPhone, mail, 
                     CityStateZip, Dimensions, comments, ID,
                     updated_by, updated_at, latitude, longitude,
-                    hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name
+                    hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name,
+                    assigned_dispatcher_id
                  FROM Trucks'
             );
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -70,7 +71,8 @@ class TruckController
                     'hold_status' => $row['hold_status'],
                     'hold_started_at' => $row['hold_started_at'],
                     'hold_dispatcher_id' => $row['hold_dispatcher_id'],
-                    'hold_dispatcher_name' => $row['hold_dispatcher_name']
+                    'hold_dispatcher_name' => $row['hold_dispatcher_name'],
+                    'assigned_dispatcher_id' => $row['assigned_dispatcher_id']
                 ];
             }, $results);
 
@@ -119,7 +121,8 @@ class TruckController
                 'email' => 'mail',
                 'city_state_zip' => 'CityStateZip',
                 'dimensions_payload' => 'Dimensions',
-                'comment' => 'comments'
+                'comment' => 'comments',
+                'assigned_dispatcher_id' => 'assigned_dispatcher_id'
             ];
             
             // Only include fields that are actually provided in the request

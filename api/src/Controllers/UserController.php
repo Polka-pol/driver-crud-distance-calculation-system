@@ -142,4 +142,24 @@ class UserController
             self::sendResponse(['success' => false, 'message' => 'Database error during deletion.'], 500);
         }
     }
+
+    public static function getDispatchers()
+    {
+        try {
+            $pdo = Database::getConnection();
+            // Get only dispatchers (not managers or admins)
+            $stmt = $pdo->prepare("
+                SELECT id, username, full_name, role
+                FROM users 
+                WHERE role = 'dispatcher'
+                ORDER BY full_name ASC, username ASC
+            ");
+            $stmt->execute();
+            $dispatchers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            self::sendResponse($dispatchers);
+        } catch (PDOException $e) {
+            Logger::error('Failed to fetch dispatchers', ['error' => $e->getMessage()]);
+            self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
+        }
+    }
 } 

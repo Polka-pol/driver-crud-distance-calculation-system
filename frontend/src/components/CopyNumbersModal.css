@@ -1,0 +1,102 @@
+.copy-numbers-modal {
+    max-width: 600px;
+    width: 90%;
+}
+
+.copy-numbers-modal .modal-body {
+    padding: 20px;
+}
+
+.copy-numbers-modal textarea {
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    resize: vertical;
+    min-height: 120px;
+}
+
+.phone-numbers-textarea {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.copy-info {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 6px;
+    border-left: 4px solid #2563eb;
+}
+
+.copy-info p {
+    margin: 4px 0;
+    font-size: 13px;
+    color: #374151;
+}
+
+.copy-info strong {
+    color: #1f2937;
+}
+
+.copy-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    height: 40px;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.copy-btn:hover {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.copy-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.copy-btn:not(:disabled):not(:hover) {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.copy-btn:not(:disabled):hover {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .copy-numbers-modal {
+        width: 95%;
+        margin: 10px;
+    }
+    
+    .copy-numbers-modal textarea {
+        font-size: 13px;
+        min-height: 100px;
+    }
+    
+    .copy-info {
+        font-size: 12px;
+    }
+} 

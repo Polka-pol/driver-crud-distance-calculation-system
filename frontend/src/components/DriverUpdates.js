@@ -1,0 +1,490 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import './DriverUpdates.css';
+import { apiClient } from '../utils/apiClient';
+import { API_BASE_URL } from '../config';
+import UpdateStatusModal from './UpdateStatusModal';
+import CopyNumbersModal from './CopyNumbersModal';
+
+const DriverUpdates = ({ onBack, user }) => {
+    const [activeTab, setActiveTab] = useState('daily');
+    const [view, setView] = useState('my'); // 'my' or 'all'
+    const [drivers, setDrivers] = useState({
+        need_update: [],
+        updated: [],
+        no_need_update: []
+    });
+    const [monthlyDrivers, setMonthlyDrivers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isAutoUpdating, setIsAutoUpdating] = useState(false);
+    const [autoUpdateResult, setAutoUpdateResult] = useState(null);
+    const [error, setError] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+    const [selectedTruck, setSelectedTruck] = useState(null);
+    const [showCopyNumbersModal, setShowCopyNumbersModal] = useState(false);
+    const [driversToCopy, setDriversToCopy] = useState([]);
+
+    const autoUpdateDriverStatuses = useCallback(async () => {
+        setIsAutoUpdating(true);
+        try {
+            const response = await apiClient(`${API_BASE_URL}/driver-updates/auto-update?view=${view}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                console.log(`Auto-updated ${data.updated_status_count} statuses and cleared ${data.cleared_no_need_count} no-need-update records`);
+                if (data.updated_status_count > 0 || data.cleared_no_need_count > 0) {
+                    setAutoUpdateResult({
+                        updatedStatuses: data.updated_status_count,
+                        clearedNoNeed: data.cleared_no_need_count
+                    });
+                    // Clear the result after 5 seconds
+                    setTimeout(() => setAutoUpdateResult(null), 5000);
+                }
+            } else {
+                console.error('Auto-update failed:', data.message);
+            }
+        } catch (err) {
+            console.error('Error during auto-update:', err);
+        } finally {
+            setIsAutoUpdating(false);
+        }
+    }, [view]);
+
+    const loadDriverStatuses = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+            // First, auto-update driver statuses
+            await autoUpdateDriverStatuses();
+            
+            // Then load the updated data
+            const response = await apiClient(`${API_BASE_URL}/driver-updates/status?tab=${activeTab}&view=${view}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                if (activeTab === 'daily') {
+                    setDrivers(data.drivers);
+                } else {
+                    setMonthlyDrivers(data.drivers);
+                }
+            } else {
+                setError(data.message || 'Failed to load driver statuses');
+            }
+        } catch (err) {
+            console.error('Error loading driver statuses:', err);
+            setError('Error loading driver statuses');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [activeTab, view, autoUpdateDriverStatuses]);
+
+    // Load data when component mounts or parameters change
+    useEffect(() => {
+        loadDriverStatuses();
+    }, [activeTab, view, loadDriverStatuses]);
+
+    const openModal = useCallback((truck) => {
+        setSelectedTruck(truck);
+        setShowModal(true);
+    }, []);
+
+    const closeModal = useCallback(() => {
+        setShowModal(false);
+        setSelectedTruck(null);
+    }, []);
+
+    const openCopyNumbersModal = useCallback((drivers) => {
+        setDriversToCopy(drivers);
+        setShowCopyNumbersModal(true);
+    }, []);
+
+    // Check if user has permission to set no update for a specific driver
+    const canSetNoUpdate = useCallback((driver) => {
+        // Admin, manager, and dispatcher can always set no update
+        if (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'dispatcher') {
+            return true;
+        }
+        
+        return false;
+    }, [user]);
+
+    const closeCopyNumbersModal = useCallback(() => {
+        setShowCopyNumbersModal(false);
+        setDriversToCopy([]);
+    }, []);
+
+    const handleSaveStatus = useCallback(async (modalData) => {
+        if (!selectedTruck) return;
+
+        try {
+            const response = await apiClient(`${API_BASE_URL}/trucks/${selectedTruck.ID}/update-no-need-status`, {
+                method: 'POST',
+                body: JSON.stringify(modalData)
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                closeModal();
+                loadDriverStatuses(); // Refresh data
+            } else {
+                setError(data.message || 'Failed to update status');
+            }
+        } catch (err) {
+            console.error('Error updating status:', err);
+            setError('Error updating status');
+        }
+    }, [selectedTruck, closeModal, loadDriverStatuses]);
+
+    const handleClearStatus = useCallback(async (truck) => {
+        try {
+            const response = await apiClient(`${API_BASE_URL}/trucks/${truck.ID}/clear-no-need-status`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                loadDriverStatuses(); // Refresh data
+            } else {
+                setError(data.message || 'Failed to clear status');
+            }
+        } catch (err) {
+            console.error('Error clearing status:', err);
+            setError('Error clearing status');
+        }
+    }, [loadDriverStatuses]);
+
+
+
+    const handleDeleteDriver = useCallback(async (driver) => {
+        if (!window.confirm(`Are you sure you want to delete driver ${driver.DriverName} (Truck #${driver.TruckNumber})? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const response = await apiClient(`${API_BASE_URL}/trucks/${driver.ID}`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                loadDriverStatuses(); // Refresh data
+            } else {
+                setError(data.message || 'Failed to delete driver');
+            }
+        } catch (err) {
+            console.error('Error deleting driver:', err);
+            setError('Error deleting driver');
+        }
+    }, [loadDriverStatuses]);
+
+    const formatDate = useCallback((dateString) => {
+        if (!dateString) return 'N/A';
+        
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString();
+        } catch {
+            return dateString;
+        }
+    }, []);
+
+    const formatWhenWillBeThere = useCallback((dateString) => {
+        if (!dateString) return 'Not set';
+        
+        try {
+            // Try to parse as date first
+            const date = new Date(dateString);
+            if (!isNaN(date.getTime())) {
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            } else {
+                return dateString; // Return as is if not a valid date
+            }
+        } catch {
+            return dateString;
+        }
+    }, []);
+
+    const DriversTable = useCallback(({ drivers, category, showActions = true }) => {
+        // Sort drivers for monthly review (oldest first)
+        const sortedDrivers = category === 'monthly_review' && drivers.length > 0 && drivers[0].hasOwnProperty('WhenWillBeThere') 
+            ? [...drivers].sort((a, b) => {
+                const dateA = a.WhenWillBeThere ? new Date(a.WhenWillBeThere) : new Date(0);
+                const dateB = b.WhenWillBeThere ? new Date(b.WhenWillBeThere) : new Date(0);
+                return dateA - dateB; // Oldest first
+            })
+            : drivers;
+
+        const calculateDaysSinceUpdate = (dateString) => {
+            if (!dateString) return null;
+            
+            try {
+                const lastUpdate = new Date(dateString);
+                const today = new Date();
+                const diffTime = today - lastUpdate;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays;
+            } catch {
+                return null;
+            }
+        };
+
+        return (
+            <div className="drivers-table-container">
+                {drivers.length === 0 ? (
+                    <div className="empty-table-message">
+                        {category === 'need_update' && 'No drivers need updates'}
+                        {category === 'updated' && 'No updated drivers'}
+                        {category === 'no_need_update' && 'No drivers marked as no update needed'}
+                    </div>
+                ) : (
+                    <table className="drivers-table">
+                        <thead>
+                            <tr>
+                                <th>Truck #</th>
+                                <th>Driver Name</th>
+                                <th>Phone</th>
+                                <th>Status</th>
+                                <th>Location</th>
+                                <th>{category === 'monthly_review' ? 'Last Updated' : 'Will Be There'}</th>
+                                {category === 'monthly_review' && <th>Days Ago</th>}
+                                {category === 'no_need_update' && <th>Reason</th>}
+                                {category === 'no_need_update' && <th>Until Date</th>}
+                                {showActions && <th>Actions</th>}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sortedDrivers.map(driver => {
+                                const daysSinceUpdate = category === 'monthly_review' ? calculateDaysSinceUpdate(driver.WhenWillBeThere) : null;
+                                
+                                return (
+                                    <tr key={driver.ID}>
+                                        <td className="truck-number-cell">#{driver.TruckNumber}</td>
+                                        <td className="driver-name-cell">{driver.DriverName || 'No driver assigned'}</td>
+                                        <td className="phone-cell">{driver.CellPhone || driver.contactphone || 'N/A'}</td>
+                                        <td className="status-cell">{driver.Status || 'N/A'}</td>
+                                        <td className="location-cell">{driver.CityStateZip || 'N/A'}</td>
+                                        <td className="will-be-there-cell">
+                                            {category === 'monthly_review' 
+                                                ? formatDate(driver.WhenWillBeThere) 
+                                                : formatWhenWillBeThere(driver.WhenWillBeThere)
+                                            }
+                                        </td>
+                                        {category === 'monthly_review' && (
+                                            <td className="days-ago-cell">
+                                                {daysSinceUpdate !== null ? (
+                                                    <span className={`days-ago ${daysSinceUpdate > 30 ? 'overdue' : ''}`}>
+                                                        {daysSinceUpdate} days
+                                                    </span>
+                                                ) : (
+                                                    <span className="days-ago overdue">Never</span>
+                                                )}
+                                            </td>
+                                        )}
+                                        {category === 'no_need_update' && (
+                                            <td className="reason-cell">{driver.no_need_update_reason || 'N/A'}</td>
+                                        )}
+                                        {category === 'no_need_update' && (
+                                            <td className="until-date-cell">{formatDate(driver.no_need_update_until)}</td>
+                                        )}
+                                        {showActions && (
+                                            <td className="actions-cell">
+                                                {category === 'need_update' && canSetNoUpdate(driver) && (
+                                                    <button 
+                                                        className="btn btn-primary"
+                                                        onClick={() => openModal(driver)}
+                                                    >
+                                                        Set No Update
+                                                    </button>
+                                                )}
+                                                {category === 'monthly_review' && (
+                                                    <button 
+                                                        className="btn btn-danger"
+                                                        onClick={() => handleDeleteDriver(driver)}
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                )}
+                                                {category === 'no_need_update' && (
+                                                    <>
+                                                        {canSetNoUpdate(driver) && (
+                                                            <>
+                                                                <button 
+                                                                    className="btn btn-secondary"
+                                                                    onClick={() => handleClearStatus(driver)}
+                                                                >
+                                                                    Clear
+                                                                </button>
+                                                                <button 
+                                                                    className="btn btn-primary"
+                                                                    onClick={() => openModal(driver)}
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+        );
+    }, [formatDate, formatWhenWillBeThere, openModal, handleClearStatus, handleDeleteDriver, canSetNoUpdate]);
+
+    const DailyUpdatesTab = useCallback(() => (
+        <div className="daily-updates">
+            <div className="categories-grid">
+                <div className="category-section need-update">
+                    <div className="category-header">
+                        <div className="category-header-content">
+                            <h3>Need to Update ({drivers.need_update.length})</h3>
+                            {drivers.need_update.length > 0 && (
+                                <button 
+                                    className="copy-numbers-btn"
+                                    onClick={() => openCopyNumbersModal(drivers.need_update)}
+                                    title="Copy phone numbers of all drivers in this category"
+                                >
+                                    Copy numbers
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <DriversTable 
+                        drivers={drivers.need_update}
+                        category="need_update"
+                        showActions={true}
+                    />
+                </div>
+
+                <div className="category-section updated">
+                    <div className="category-header">
+                        <h3>Updated ({drivers.updated.length})</h3>
+                    </div>
+                    <DriversTable 
+                        drivers={drivers.updated}
+                        category="updated"
+                        showActions={false}
+                    />
+                </div>
+
+                <div className="category-section no-need-update">
+                    <div className="category-header">
+                        <h3>No Need to Update ({drivers.no_need_update.length})</h3>
+                    </div>
+                    <DriversTable 
+                        drivers={drivers.no_need_update}
+                        category="no_need_update"
+                        showActions={true}
+                    />
+                </div>
+            </div>
+        </div>
+    ), [drivers, openCopyNumbersModal]);
+
+    const MonthlyReviewTab = useCallback(() => (
+        <div className="monthly-review">
+            <div className="monthly-review-header">
+                <h3>Drivers Not Updated for Over a Month ({monthlyDrivers.length})</h3>
+            </div>
+            <DriversTable 
+                drivers={monthlyDrivers}
+                category="monthly_review"
+                showActions={true}
+            />
+        </div>
+    ), [monthlyDrivers]);
+
+    return (
+        <div className="driver-updates-page">
+            <div className="page-header">
+                <div className="header-left">
+                    <h2>Driver Updates</h2>
+                </div>
+                
+                <div className="header-controls">
+                    <div className="view-selector">
+                        <label>View:</label>
+                        <select value={view} onChange={(e) => setView(e.target.value)}>
+                            <option value="my">My Drivers</option>
+                            <option value="all">All Drivers</option>
+                            <option value="unassigned">Do Not Assigned</option>
+                        </select>
+                    </div>
+                    <button onClick={onBack} className="back-btn">
+                        ← Back to Main
+                    </button>
+                </div>
+            </div>
+
+            <div className="tabs-container">
+                <div className="tabs">
+                    <button 
+                        className={`tab ${activeTab === 'daily' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('daily')}
+                    >
+                        Daily Updates
+                    </button>
+                    <button 
+                        className={`tab ${activeTab === 'monthly' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('monthly')}
+                    >
+                        Monthly Review
+                    </button>
+                </div>
+            </div>
+
+            {error && (
+                <div className="error-message">
+                    {error}
+                    <button onClick={() => setError(null)}>×</button>
+                </div>
+            )}
+
+            {autoUpdateResult && (
+                <div className="success-message">
+                    <span>✓ Auto-updated {autoUpdateResult.updatedStatuses} driver statuses and cleared {autoUpdateResult.clearedNoNeed} no-need-update records</span>
+                    <button onClick={() => setAutoUpdateResult(null)}>×</button>
+                </div>
+            )}
+
+            <div className="content">
+                {isAutoUpdating && (
+                    <div className="auto-updating">
+                        <div className="auto-updating-spinner"></div>
+                        Auto-updating driver statuses...
+                    </div>
+                )}
+                {isLoading ? (
+                    <div className="loading">Loading driver statuses...</div>
+                ) : (
+                    <>
+                        {activeTab === 'daily' && <DailyUpdatesTab />}
+                        {activeTab === 'monthly' && <MonthlyReviewTab />}
+                    </>
+                )}
+            </div>
+
+            <UpdateStatusModal
+                show={showModal}
+                onClose={closeModal}
+                truck={selectedTruck}
+                onSave={handleSaveStatus}
+            />
+            
+            <CopyNumbersModal
+                show={showCopyNumbersModal}
+                onClose={closeCopyNumbersModal}
+                drivers={driversToCopy}
+            />
+        </div>
+    );
+};
+
+export default DriverUpdates;

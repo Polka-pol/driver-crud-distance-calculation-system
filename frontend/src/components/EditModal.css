@@ -37,6 +37,52 @@
   flex: 1;
 }
 
+/* Assigned Dispatcher Section */
+.assigned-dispatcher-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-left: 16px;
+  min-width: 200px;
+}
+
+.assigned-dispatcher-section label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  text-align: right;
+  margin: 0;
+}
+
+.dispatcher-select {
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background-color: #ffffff;
+  color: #374151;
+  min-width: 180px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dispatcher-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.dispatcher-select:hover:not(:focus) {
+  border-color: #9ca3af;
+}
+
+.dispatcher-select:disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
 /* Compact Last Modified Info */
 .last-modified-compact {
   display: flex;
@@ -269,6 +315,26 @@
   transform: translateY(-1px);
 }
 
+/* Set No Update button styles */
+.edit-modal-content .edit-form-actions .btn.btn-primary {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  height: 40px;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.edit-modal-content .edit-form-actions .btn.btn-primary:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
 /* Responsive styles */
 @media (max-width: 1024px) {
   .modal-overlay .edit-modal-content {
@@ -286,10 +352,26 @@
   
   .modal-header {
     flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 12px;
   }
-  
+
+  .assigned-dispatcher-section {
+    align-items: flex-start;
+    margin-left: 0;
+    min-width: auto;
+    width: 100%;
+  }
+
+  .assigned-dispatcher-section label {
+    text-align: left;
+  }
+
+  .dispatcher-select {
+    min-width: auto;
+    width: 100%;
+  }
+
   .last-modified-compact {
     align-items: flex-start;
     margin-left: 0;
@@ -346,6 +428,25 @@
   .last-modified-compact .modified-date {
     font-size: 0.65rem;
   }
+
+  .assigned-dispatcher-section {
+    align-items: flex-start;
+    margin-left: 0;
+    min-width: auto;
+    width: 100%;
+  }
+
+  .assigned-dispatcher-section label {
+    text-align: left;
+    font-size: 0.7rem;
+  }
+
+  .dispatcher-select {
+    min-width: auto;
+    width: 100%;
+    font-size: 0.75rem;
+    padding: 4px 6px;
+  }
   
   .edit-form-actions {
     flex-direction: column;
@@ -360,6 +461,7 @@
   .delete-btn,
   .cancel-btn,
   .save-btn {
-    width: 100%;
+    padding: 8px 16px;
+    font-size: 0.85rem;
   }
 } 
