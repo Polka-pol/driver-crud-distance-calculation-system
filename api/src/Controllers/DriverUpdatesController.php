@@ -172,11 +172,26 @@ class DriverUpdatesController
         if (!empty($driver['WhenWillBeThere'])) {
             $whenWillBeThere = $driver['WhenWillBeThere'];
             
-            // Try to parse the date
-            $parsedDate = self::parseWhenWillBeThereDate($whenWillBeThere);
+            // Try to parse the datetime
+            $parsedDateTime = self::parseWhenWillBeThereDateTime($whenWillBeThere);
             
-            if ($parsedDate && $parsedDate >= $today) {
+            if ($parsedDateTime && $parsedDateTime >= $now) {
                 return 'updated';
+            }
+        }
+        
+        // Check if driver updated after 6 AM today
+        if (!empty($driver['WhenWillBeThere'])) {
+            $whenWillBeThere = $driver['WhenWillBeThere'];
+            $parsedDateTime = self::parseWhenWillBeThereDateTime($whenWillBeThere);
+            
+            if ($parsedDateTime) {
+                $today6AM = $today . ' 06:00:00';
+                
+                // If driver updated after 6 AM today, they don't need update
+                if ($parsedDateTime >= $today6AM) {
+                    return 'updated';
+                }
             }
         }
         
@@ -215,6 +230,42 @@ class DriverUpdatesController
         $timestamp = strtotime($dateString);
         if ($timestamp !== false) {
             return date('Y-m-d', $timestamp);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Parse WhenWillBeThere datetime field with hours and minutes
+     */
+    private static function parseWhenWillBeThereDateTime($dateString)
+    {
+        if (empty($dateString)) {
+            return null;
+        }
+        
+        // Try different datetime formats
+        $formats = [
+            'Y-m-d H:i:s',
+            'Y-m-d H:i',
+            'Y-m-d',
+            'd/m/Y H:i',
+            'd/m/Y',
+            'm/d/Y H:i',
+            'm/d/Y'
+        ];
+        
+        foreach ($formats as $format) {
+            $date = \DateTime::createFromFormat($format, $dateString);
+            if ($date !== false) {
+                return $date->format('Y-m-d H:i:s');
+            }
+        }
+        
+        // Try strtotime as fallback
+        $timestamp = strtotime($dateString);
+        if ($timestamp !== false) {
+            return date('Y-m-d H:i:s', $timestamp);
         }
         
         return null;
@@ -415,8 +466,11 @@ class DriverUpdatesController
                 
                 // Check if status is "Available on" and date is in the past
                 if (strpos($driver['Status'], 'Available on') === 0) {
-                    $statusDate = self::parseWhenWillBeThereDate($driver['WhenWillBeThere']);
-                    if ($statusDate && $statusDate < $today) {
+                    $statusDateTime = self::parseWhenWillBeThereDateTime($driver['WhenWillBeThere']);
+                    $today6AM = $today . ' 06:00:00';
+                    
+                    // Only change status if it's past 6 AM and the date is in the past
+                    if ($statusDateTime && $statusDateTime < $now && $now >= $today6AM) {
                         $updates[] = "Status = 'Available'";
                         $updatedCount++;
                     }
