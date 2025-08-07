@@ -8,6 +8,7 @@ use App\Services\MapboxService;
 use App\Core\Database;
 use App\Core\Logger;
 use App\Core\ActivityLogger;
+use App\Core\EDTTimeConverter;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Exception;
@@ -933,7 +934,7 @@ class DistanceController
     {
         try {
             $failedData = [
-                'timestamp' => date('Y-m-d H:i:s'),
+                'timestamp' => EDTTimeConverter::getCurrentEDT(),
                 'stats' => $stats,
                 'error' => $error
             ];
@@ -1304,7 +1305,7 @@ class DistanceController
             http_response_code(200);
             echo json_encode([
                 'cache_stats' => $stats,
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => EDTTimeConverter::getCurrentEDT()
             ]);
 
         } catch (Exception $e) {
@@ -1353,9 +1354,9 @@ class DistanceController
                 VALUES (?, ?, 'sent', ?, CURRENT_TIMESTAMP)
                 ON DUPLICATE KEY UPDATE 
                 driver_distance_miles = VALUES(driver_distance_miles),
-                updated_at = CURRENT_TIMESTAMP
+                updated_at = :edt_time
             ");
-            $stmt->execute([$loadId, $driverId, $distanceMiles]);
+            $stmt->execute([$loadId, $driverId, $distanceMiles, EDTTimeConverter::getCurrentEDT()]);
 
         } catch (Exception $e) {
             Logger::error('Failed to create/update load offer', [

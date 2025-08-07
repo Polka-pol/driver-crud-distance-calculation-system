@@ -893,16 +893,24 @@ h1 {
 
 .user-welcome {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-right: 8px;
+  gap: 8px;
+}
+
+.user-info {
+  display: flex;
   flex-direction: column;
   align-items: flex-end;
-  margin-right: 8px;
+  gap: 2px;
 }
 
 .user-name {
   font-weight: 600;
   color: #334155;
   font-size: 0.9rem;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 .user-role {
@@ -917,6 +925,7 @@ h1 {
   color: #64748b;
   font-weight: 500;
   font-family: monospace;
+  line-height: 1.1;
 }
 
 .header-actions {
@@ -1167,6 +1176,13 @@ h1 {
   .user-welcome {
     align-items: center;
     margin-right: 0;
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .user-info {
+    gap: 1px;
+    align-items: flex-end;
   }
 
   .header-actions {
@@ -1202,11 +1218,73 @@ h1 {
 
 @media (max-width: 480px) {
   .user-welcome {
-    display: none;
+    flex-direction: row;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .user-info {
+    gap: 1px;
+    align-items: flex-end;
   }
 
   .header-right {
     gap: 8px;
+  }
+}
+
+/* Server Time Styles */
+.server-time {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  margin-right: 8px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.server-time:hover {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.server-time.syncing {
+  background: #fef3c7;
+  color: #d97706;
+  border-color: #f59e0b;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@media (max-width: 768px) {
+  .server-time {
+    font-size: 0.8rem;
+    padding: 3px 8px;
+    margin-right: 6px;
+    min-width: 70px;
+  }
+}
+
+@media (max-width: 480px) {
+  .server-time {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    margin-right: 4px;
+    min-width: 60px;
   }
 }
 

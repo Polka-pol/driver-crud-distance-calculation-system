@@ -129,6 +129,25 @@ Each component has its own `.env.example` file:
 - **MySQL Database** - Persistent data storage
 - **Mapbox** - Location services and distance calculations
 
+## 🕐 EDT Time Integration
+
+### Server-Side EDT Implementation
+- **`EDTTimeConverter.php`** - Centralized EDT time utilities
+- **All timestamps** (`updated_at`, `hold_started_at`, `no_need_update_until`) stored in EDT
+- **"Available on" logic** uses EDT time for status updates
+- **Phone time conversion** automatically converts to EDT before saving
+
+### Frontend EDT Handling
+- **`timeUtils.js`** - EDT time formatting utilities (no conversion needed)
+- **`ServerTime.js`** - Displays EDT server time in header
+- **`HoldCell.js`** - Uses EDT time for hold countdown calculations
+
+### Benefits
+- **Consistency**: All times in EDT format
+- **Performance**: No client-side timezone conversion needed
+- **Accuracy**: Server provides EDT time directly
+- **Maintainability**: Centralized time handling logic
+
 ## 🏗️ Architecture
 
 ### Data Flow

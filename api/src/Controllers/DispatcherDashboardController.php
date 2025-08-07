@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Core\Database;
 use App\Core\Auth;
 use App\Core\Logger;
+use App\Core\EDTTimeConverter;
 use PDO;
 use PDOException;
 use Exception;
@@ -95,8 +96,8 @@ class DispatcherDashboardController
      */
     private static function getTodayStatsAllDispatchers($pdo)
     {
-        // Calculate the "working day" boundaries (6 AM to 6 AM)
-        $now = new \DateTime();
+        // Calculate the "working day" boundaries (6 AM to 6 AM) using EDT
+        $now = new \DateTime(EDTTimeConverter::getCurrentEDT());
         $currentHour = (int)$now->format('H');
         
         if ($currentHour >= 6) {
@@ -153,8 +154,8 @@ class DispatcherDashboardController
      */
     private static function getMonthlyCalendarData($pdo, $dispatcherId)
     {
-        // Get current month data
-        $currentDate = new \DateTime();
+        // Get current month data using EDT
+        $currentDate = new \DateTime(EDTTimeConverter::getCurrentEDT());
         $year = $currentDate->format('Y');
         $month = $currentDate->format('m');
         
@@ -240,8 +241,8 @@ class DispatcherDashboardController
             for ($day = 0; $day < 7; $day++) {
                 $dateStr = $current->format('Y-m-d');
                 $isCurrentMonth = $current->format('m') == $firstDayOfMonth->format('m');
-                $isToday = $current->format('Y-m-d') === date('Y-m-d');
-                $isFuture = $current > new \DateTime();
+                $isToday = $current->format('Y-m-d') === EDTTimeConverter::getCurrentEDTDate();
+                $isFuture = $current > new \DateTime(EDTTimeConverter::getCurrentEDT());
                 $isWeekend = in_array($current->format('w'), [0, 6]); // Sunday = 0, Saturday = 6
                 
                 $dayStats = $dailyStats[$dateStr] ?? ['calculations' => 0, 'updates' => 0];
@@ -287,8 +288,8 @@ class DispatcherDashboardController
      */
     private static function getHeatmapDataAllDispatchers($pdo)
     {
-        // Get current month data
-        $currentDate = new \DateTime();
+        // Get current month data using EDT
+        $currentDate = new \DateTime(EDTTimeConverter::getCurrentEDT());
         $year = $currentDate->format('Y');
         $month = $currentDate->format('m');
         
@@ -318,8 +319,8 @@ class DispatcherDashboardController
         $monthDays = [];
         $current = clone $firstDayOfMonth;
         while ($current <= $lastDayOfMonth) {
-            $isToday = $current->format('Y-m-d') === date('Y-m-d');
-            $isFuture = $current > new \DateTime();
+            $isToday = $current->format('Y-m-d') === EDTTimeConverter::getCurrentEDTDate();
+            $isFuture = $current > new \DateTime(EDTTimeConverter::getCurrentEDT());
             $isWeekend = in_array($current->format('w'), [0, 6]);
             
             $monthDays[] = [

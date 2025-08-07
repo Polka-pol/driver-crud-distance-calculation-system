@@ -6,6 +6,7 @@ use App\Core\Database;
 use App\Core\Logger;
 use App\Core\ActivityLogger;
 use App\Core\DriverActivityLogger;
+use App\Core\EDTTimeConverter;
 use Firebase\JWT\JWT;
 use PDO;
 use PDOException;
@@ -246,9 +247,8 @@ class DriverController
 
             // Handle timestamp update from phone
             if (isset($data['updated_at'])) {
-                // Convert from ISO string to MySQL datetime format
-                $phoneTimestamp = new DateTime($data['updated_at']);
-                $updateData['updated_at'] = $phoneTimestamp->format('Y-m-d H:i:s');
+                // Convert phone time to EDT
+                $updateData['updated_at'] = EDTTimeConverter::convertPhoneTimeToEDT($data['updated_at']);
             }
 
             $sql = "UPDATE Trucks SET CityStateZip = :CityStateZip";
@@ -258,12 +258,16 @@ class DriverController
             if (isset($updateData['updated_at'])) {
                 $sql .= ", updated_at = :updated_at";
             } else {
-                $sql .= ", updated_at = NOW()";
+                $sql .= ", updated_at = :edt_time";
             }
             $sql .= " WHERE ID = :ID";
 
             $stmt = $pdo->prepare($sql);
-            $stmt->execute($updateData);
+            $executeData = $updateData;
+            if (!isset($executeData['updated_at'])) {
+                $executeData['edt_time'] = EDTTimeConverter::getCurrentEDT();
+            }
+            $stmt->execute($executeData);
 
             // Determine if location actually changed
             $locationChanged = isset($data['location_changed']) ? $data['location_changed'] : true;
@@ -357,9 +361,10 @@ class DriverController
             $pdo = Database::getConnection();
             
             // Update status in database
-            $stmt = $pdo->prepare('UPDATE Trucks SET Status = :status, updated_at = NOW(), updated_by = :updated_by WHERE ID = :id');
+            $stmt = $pdo->prepare('UPDATE Trucks SET Status = :status, updated_at = :edt_time, updated_by = :updated_by WHERE ID = :id');
             $stmt->execute([
                 'status' => $status,
+                'edt_time' => EDTTimeConverter::getCurrentEDT(),
                 'updated_by' => $driverData['driverName'] ?? 'Driver App',
                 'id' => $driverData['id']
             ]);

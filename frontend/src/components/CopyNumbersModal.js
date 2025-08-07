@@ -4,6 +4,7 @@ import './CopyNumbersModal.css';
 const CopyNumbersModal = ({ show, onClose, drivers }) => {
     const [phoneNumbers, setPhoneNumbers] = useState('');
     const [copySuccess, setCopySuccess] = useState(false);
+    const [isFirstCopy, setIsFirstCopy] = useState(true);
 
     useEffect(() => {
         if (show && drivers) {
@@ -20,6 +21,7 @@ const CopyNumbersModal = ({ show, onClose, drivers }) => {
             }).join(' ');
             
             setPhoneNumbers(formattedNumbers);
+            setIsFirstCopy(true); // Скидаємо стан при відкритті модального вікна
         }
     }, [show, drivers]);
 
@@ -29,15 +31,23 @@ const CopyNumbersModal = ({ show, onClose, drivers }) => {
             const allNumbers = phoneNumbers.replace(/\n/g, '').replace(/,\s*,/g, ',').replace(/,\s*$/g, '');
             const numbersArray = allNumbers.split(',').map(num => num.trim()).filter(num => num);
             
-            // Беремо тільки перші 40 номерів для копіювання з комою в кінці
-            const first40Numbers = numbersArray.slice(0, 40).join(', ') + ',';
+            // Визначаємо кількість номерів для копіювання
+            const copyCount = isFirstCopy ? 2 : 40;
             
-            // Залишаємо тільки номери після 40-го для відображення
-            const remainingNumbers = numbersArray.slice(40);
+            // Беремо номери для копіювання з комою в кінці
+            const numbersToCopy = numbersArray.slice(0, copyCount).join(', ') + ',';
             
-            navigator.clipboard.writeText(first40Numbers).then(() => {
+            // Залишаємо тільки номери після скопійованих для відображення
+            const remainingNumbers = numbersArray.slice(copyCount);
+            
+            navigator.clipboard.writeText(numbersToCopy).then(() => {
                 setCopySuccess(true);
                 setTimeout(() => setCopySuccess(false), 2000); // Hide success message after 2 seconds
+                
+                // Змінюємо стан після першого копіювання
+                if (isFirstCopy) {
+                    setIsFirstCopy(false);
+                }
                 
                 // Оновлюємо текстове поле, залишаючи тільки невикористані номери
                 if (remainingNumbers.length > 0) {
@@ -94,8 +104,7 @@ const CopyNumbersModal = ({ show, onClose, drivers }) => {
                     </div>
                     <div className="copy-info">
                         <p><strong>Logic:</strong> Uses "Contact phone" if available, otherwise uses "Cell phone"</p>
-                        <p><strong>Display:</strong> Up to 3 numbers per line for easy reading</p>
-                        <p><strong>Copy:</strong> First 40 numbers will be copied and removed from the list</p>
+                        <p><strong>Copy:</strong> First copy: 2 numbers, subsequent copies: 40 numbers</p>
                         <p><strong>Remaining:</strong> Unused numbers will stay in the field for next copy</p>
                     </div>
                 </div>
@@ -105,7 +114,7 @@ const CopyNumbersModal = ({ show, onClose, drivers }) => {
                         onClick={handleCopy}
                         disabled={!phoneNumbers.trim()}
                     >
-                        {copySuccess ? 'Copied!' : `Copy First 40 Numbers (${Math.min(phoneNumbers.split(',').filter(num => num.trim()).length, 40)})`}
+                        {copySuccess ? 'Copied!' : `Copy First ${isFirstCopy ? '2' : '40'} Numbers (${Math.min(phoneNumbers.split(',').filter(num => num.trim()).length, isFirstCopy ? 2 : 40)})`}
                     </button>
                 </div>
             </div>

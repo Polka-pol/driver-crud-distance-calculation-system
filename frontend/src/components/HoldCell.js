@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { getCurrentEDT } from '../utils/timeUtils';
 
 const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpired, serverTimeOffset = 0 }) => {
+  // Component for displaying hold status and countdown timer using EDT timezone
   const [timeLeft, setTimeLeft] = useState(null);
   const [showHoldButton, setShowHoldButton] = useState(false);
   const [hasTriggeredExpired, setHasTriggeredExpired] = useState(false);
@@ -9,7 +11,7 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
   const canRemoveHold = truck.hold_dispatcher_id === currentUserId;
   const loadsMark = truck.loads_mark || '-';
 
-  // Calculate time remaining with real-time countdown using server time
+  // Calculate time remaining with real-time countdown using EDT time
   useEffect(() => {
     if (!isOnHold || !truck.hold_started_at) {
       setTimeLeft(null);
@@ -18,16 +20,15 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
     }
 
     const calculateTimeLeft = () => {
-      // Use server time (hold_started_at) and adjust for server time offset
-      const startTime = new Date(truck.hold_started_at);
-      const now = new Date();
+      // Server provides hold_started_at directly in EDT
+      const startTimeEDT = new Date(truck.hold_started_at);
       
-      // Adjust for server time offset if provided
-      const adjustedNow = new Date(now.getTime() + serverTimeOffset);
+      // Get current time in EDT timezone
+      const currentTimeEDT = getCurrentEDT();
       
-      // Calculate elapsed time since hold was placed
-      const elapsedMs = adjustedNow - startTime;
-      const totalRemainingMs = Math.max(0, (15 * 60 * 1000) - elapsedMs);
+      // Calculate elapsed time since hold was placed in EDT
+      const elapsedMs = currentTimeEDT - startTimeEDT;
+      const totalRemainingMs = Math.max(0, (15 * 60 * 1000) - elapsedMs); // 15 minutes in milliseconds
       
       if (totalRemainingMs <= 0) {
         setTimeLeft('EXPIRED');
@@ -52,7 +53,7 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
     const interval = setInterval(calculateTimeLeft, 1000);
 
     return () => clearInterval(interval);
-  }, [truck.hold_started_at, isOnHold, serverTimeOffset, onHoldExpired, truck.id, hasTriggeredExpired]);
+  }, [truck.hold_started_at, isOnHold, onHoldExpired, truck.id, hasTriggeredExpired]);
 
   // Reset hasTriggeredExpired when hold status changes
   useEffect(() => {

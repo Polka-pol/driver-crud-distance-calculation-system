@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Database;
 use App\Core\Logger;
+use App\Core\EDTTimeConverter;
 use PDO;
 
 class DashboardController
@@ -51,7 +52,10 @@ class DashboardController
             // 2. All-Time Activity Statistics (Optimized)
             // Use distance_log for cache/mapbox stats, activity_logs only for user queries
             // =========================================================
-            $sevenDaysAgo = date('Y-m-d H:i:s', strtotime('-7 days'));
+            // Calculate seven days ago in EDT timezone
+            $sevenDaysAgoDateTime = new \DateTime(EDTTimeConverter::getCurrentEDT());
+            $sevenDaysAgoDateTime->modify('-7 days');
+            $sevenDaysAgo = $sevenDaysAgoDateTime->format('Y-m-d H:i:s');
             
             $activityCountsStmt = $pdo->prepare("
                 SELECT 
@@ -111,7 +115,8 @@ class DashboardController
             // =========================================================
             // 4. User Daily Stats for Today
             // =========================================================
-            $todayStart = date('Y-m-d 00:00:00');
+            // Get today's start in EDT timezone
+            $todayStart = EDTTimeConverter::getCurrentEDTDate() . ' 00:00:00';
             $userDailyStatsStmt = $pdo->prepare("
                 SELECT
                     u.username,
@@ -251,8 +256,10 @@ class DashboardController
         try {
             $pdo = Database::getConnection();
             
-            // Get active users based on recent activity (last 4 hours = active session)
-            $activeThreshold = date('Y-m-d H:i:s', strtotime('-4 hours'));
+            // Get active users based on recent activity (last 4 hours = active session) in EDT
+            $activeThresholdDateTime = new \DateTime(EDTTimeConverter::getCurrentEDT());
+            $activeThresholdDateTime->modify('-4 hours');
+            $activeThreshold = $activeThresholdDateTime->format('Y-m-d H:i:s');
             
             $activeSessions = $pdo->prepare("
                 SELECT 
@@ -298,7 +305,7 @@ class DashboardController
                 // Calculate session duration (time since last activity)
                 if ($session['last_activity']) {
                     $lastActivity = new \DateTime($session['last_activity']);
-                    $now = new \DateTime();
+                    $now = new \DateTime(EDTTimeConverter::getCurrentEDT());
                     $duration = $now->diff($lastActivity);
                     
                     if ($duration->days > 0) {
@@ -313,9 +320,14 @@ class DashboardController
                     $session['duration_minutes'] = 0;
                 }
                 
-                // Format last activity
-                $session['last_activity_formatted'] = $session['last_activity'] ? 
-                    date('M j, H:i', strtotime($session['last_activity'])) : 'Never';
+                // Format last activity using EDT
+                if ($session['last_activity']) {
+                    $lastActivityDateTime = new \DateTime($session['last_activity']);
+                    $lastActivityDateTime->setTimezone(new \DateTimeZone('America/New_York'));
+                    $session['last_activity_formatted'] = $lastActivityDateTime->format('M j, H:i');
+                } else {
+                    $session['last_activity_formatted'] = 'Never';
+                }
             }
             
             // Get today's login/activity stats
@@ -398,7 +410,7 @@ class DashboardController
                 'logged_out_by' => $admin['username'] ?? 'Unknown Admin',
                 'target_user' => $user['username'],
                 'target_user_full_name' => $user['full_name'],
-                'logout_time' => date('Y-m-d H:i:s')
+                'logout_time' => EDTTimeConverter::getCurrentEDT()
             ]);
             $logStmt->execute([$userId, $details]);
 
@@ -411,7 +423,7 @@ class DashboardController
                 'target_user_id' => $userId,
                 'target_user' => $user['username'],
                 'target_user_full_name' => $user['full_name'],
-                'action_time' => date('Y-m-d H:i:s')
+                'action_time' => EDTTimeConverter::getCurrentEDT()
             ]);
             $adminLogStmt->execute([$adminUserId, $adminDetails]);
 

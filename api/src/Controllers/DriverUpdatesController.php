@@ -5,6 +5,8 @@ namespace App\Controllers;
 use App\Core\Database;
 use App\Core\Auth;
 use App\Core\Logger;
+use App\Core\DriverActivityLogger;
+use App\Core\EDTTimeConverter;
 use PDO;
 use Exception;
 use DateTime;
@@ -63,8 +65,8 @@ class DriverUpdatesController
      */
     private static function getDailyUpdateStatuses($pdo, $currentUser, $view)
     {
-        $today = date('Y-m-d');
-        $now = date('Y-m-d H:i:s');
+        $today = EDTTimeConverter::getCurrentEDTDate();
+        $now = EDTTimeConverter::getCurrentEDTDateTime();
         
         // Base query
         $sql = "
@@ -119,7 +121,10 @@ class DriverUpdatesController
      */
     private static function getMonthlyReviewDrivers($pdo, $currentUser, $view)
     {
-        $oneMonthAgo = date('Y-m-d', strtotime('-30 days'));
+        // Calculate one month ago in EDT timezone
+        $oneMonthAgoDateTime = new \DateTime(EDTTimeConverter::getCurrentEDT());
+        $oneMonthAgoDateTime->modify('-30 days');
+        $oneMonthAgo = $oneMonthAgoDateTime->format('Y-m-d');
         
         $sql = "
             SELECT 
@@ -169,28 +174,19 @@ class DriverUpdatesController
             return 'no_need_update';
         }
         
-        // Check if driver has updated (future date in WhenWillBeThere)
+        // Check if driver has updated (today or future date in WhenWillBeThere)
         if (!empty($driver['WhenWillBeThere'])) {
             $whenWillBeThere = $driver['WhenWillBeThere'];
             
             // Try to parse the datetime
             $parsedDateTime = self::parseWhenWillBeThereDateTime($whenWillBeThere);
             
-            if ($parsedDateTime && $parsedDateTime >= $now) {
-                return 'updated';
-            }
-        }
-        
-        // Check if driver updated after 6 AM today
-        if (!empty($driver['WhenWillBeThere'])) {
-            $whenWillBeThere = $driver['WhenWillBeThere'];
-            $parsedDateTime = self::parseWhenWillBeThereDateTime($whenWillBeThere);
-            
             if ($parsedDateTime) {
-                $today6AM = $today . ' 06:00:00';
+                // Get start of today in EDT
+                $todayStart = $today . ' 00:00:00';
                 
-                // If driver updated after 6 AM today, they don't need update
-                if ($parsedDateTime >= $today6AM) {
+                // If the update time is today or in the future, consider it "updated"
+                if ($parsedDateTime >= $todayStart) {
                     return 'updated';
                 }
             }
@@ -312,7 +308,7 @@ class DriverUpdatesController
                     no_need_update_reason = :reason,
                     no_need_update_until = :until_date,
                     no_need_update_comment = :comment,
-                    updated_at = CURRENT_TIMESTAMP,
+                    updated_at = :edt_time,
                     updated_by = :updated_by
                 WHERE ID = :truck_id
             ";
@@ -322,6 +318,7 @@ class DriverUpdatesController
                 'reason' => $reason,
                 'until_date' => $until_date,
                 'comment' => $comment,
+                'edt_time' => EDTTimeConverter::getCurrentEDT(),
                 'updated_by' => $currentUser->fullName ?? $currentUser->username,
                 'truck_id' => $truckId
             ]);
@@ -382,13 +379,14 @@ class DriverUpdatesController
                     no_need_update_reason = NULL,
                     no_need_update_until = NULL,
                     no_need_update_comment = NULL,
-                    updated_at = CURRENT_TIMESTAMP,
+                    updated_at = :edt_time,
                     updated_by = :updated_by
                 WHERE ID = :truck_id
             ";
             
             $updateStmt = $pdo->prepare($updateSql);
             $updateStmt->execute([
+                'edt_time' => EDTTimeConverter::getCurrentEDT(),
                 'updated_by' => $currentUser->fullName ?? $currentUser->username,
                 'truck_id' => $truckId
             ]);
@@ -427,8 +425,8 @@ class DriverUpdatesController
             // Get query parameters
             $view = $_GET['view'] ?? 'my'; // 'my', 'all', or 'unassigned'
             
-            $today = date('Y-m-d');
-            $now = date('Y-m-d H:i:s');
+            $today = EDTTimeConverter::getCurrentEDTDate();
+            $now = EDTTimeConverter::getCurrentEDTDateTime();
             
             // Base query for trucks
             $sql = "
@@ -468,10 +466,9 @@ class DriverUpdatesController
                 // Check if status is "Available on" and date is in the past
                 if (strpos($driver['Status'], 'Available on') === 0) {
                     $statusDateTime = self::parseWhenWillBeThereDateTime($driver['WhenWillBeThere']);
-                    $today6AM = $today . ' 06:00:00';
                     
-                    // Only change status if it's past 6 AM and the date is in the past
-                    if ($statusDateTime && $statusDateTime < $now && $now >= $today6AM) {
+                    // Change status if the date is in the past (any time of day)
+                    if ($statusDateTime && $statusDateTime < $now) {
                         $updates[] = "Status = 'Available'";
                         $updatedCount++;
                     }
@@ -487,8 +484,15 @@ class DriverUpdatesController
                 
                 // Apply updates if any
                 if (!empty($updates)) {
+                    // Always update the updated_at and updated_by fields
+                    $updates[] = "updated_at = :updated_at";
+                    $updates[] = "updated_by = :updated_by";
+                    
                     $updateSql = "UPDATE Trucks SET " . implode(', ', $updates) . 
                                 " WHERE ID = :truck_id";
+                    
+                    $updateParams['updated_at'] = EDTTimeConverter::getCurrentEDT();
+                    $updateParams['updated_by'] = $currentUser->fullName ?? $currentUser->username ?? 'System';
                     
                     $updateStmt = $pdo->prepare($updateSql);
                     $updateStmt->execute($updateParams);
@@ -553,9 +557,9 @@ class DriverUpdatesController
                 $monthDays[] = [
                     'date' => $currentDate->format('Y-m-d'),
                     'day' => $day,
-                    'is_today' => $currentDate->format('Y-m-d') === date('Y-m-d'),
+                    'is_today' => $currentDate->format('Y-m-d') === EDTTimeConverter::getCurrentEDTDate(),
                     'is_weekend' => in_array($currentDate->format('N'), ['6', '7']),
-                    'is_future' => $currentDate->format('Y-m-d') > date('Y-m-d')
+                    'is_future' => $currentDate->format('Y-m-d') > EDTTimeConverter::getCurrentEDTDate()
                 ];
             }
             
@@ -616,7 +620,10 @@ class DriverUpdatesController
                 $details = json_decode($activity['details'], true);
                 if ($details && isset($details['truck_id'])) {
                     $truckId = $details['truck_id'];
-                    $date = date('Y-m-d', strtotime($activity['created_at']));
+                                            // Convert activity timestamp to EDT date for consistency
+                        $activityDateTime = new \DateTime($activity['created_at']);
+                        $activityDateTime->setTimezone(new \DateTimeZone('America/New_York'));
+                        $date = $activityDateTime->format('Y-m-d');
                     
                     if (!isset($truckDailyUpdates[$truckId])) {
                         $truckDailyUpdates[$truckId] = [];

@@ -8,6 +8,7 @@ import { useModalScrollLock } from '../utils/modalScrollLock';
 import UpdateStatusModal from './UpdateStatusModal';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
+import { formatEDTTime, getCurrentEDT } from '../utils/timeUtils';
 import './EditModal.css';
 
 const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
@@ -155,13 +156,7 @@ const EditModal = ({
               <div className="modified-by">{editedTruck.updated_by || 'Unknown User'}</div>
               <div className="modified-date">
                 {editedTruck.updated_at 
-                  ? new Date(editedTruck.updated_at).toLocaleString('en-US', {
-                      month: '2-digit', 
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: false
-                    })
+                  ? formatEDTTime(editedTruck.updated_at)
                   : 'Unknown Date'
                 }
               </div>
@@ -237,14 +232,14 @@ const EditModal = ({
               <button 
                 className="now-btn"
                 onClick={() => {
-                  const now = new Date();
-                  const year = now.getFullYear();
-                  const month = String(now.getMonth() + 1).padStart(2, '0');
-                  const day = String(now.getDate()).padStart(2, '0');
-                  const hours = String(now.getHours()).padStart(2, '0');
-                  const minutes = String(now.getMinutes()).padStart(2, '0');
-                  const localDate = `${year}-${month}-${day} ${hours}:${minutes}`;
-                  onChange('arrival_time', localDate);
+                  const nowEDT = getCurrentEDT();
+                  const year = nowEDT.getFullYear();
+                  const month = String(nowEDT.getMonth() + 1).padStart(2, '0');
+                  const day = String(nowEDT.getDate()).padStart(2, '0');
+                  const hours = String(nowEDT.getHours()).padStart(2, '0');
+                  const minutes = String(nowEDT.getMinutes()).padStart(2, '0');
+                  const edtDate = `${year}-${month}-${day} ${hours}:${minutes}`;
+                  onChange('arrival_time', edtDate);
                   onChange('status', 'Available');
                 }}
               >

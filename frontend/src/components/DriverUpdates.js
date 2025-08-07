@@ -4,6 +4,7 @@ import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
 import UpdateStatusModal from './UpdateStatusModal';
 import CopyNumbersModal from './CopyNumbersModal';
+import { getCurrentEDT } from '../utils/timeUtils';
 
 const DriverUpdates = ({ onBack, user }) => {
     const [activeTab, setActiveTab] = useState('daily');
@@ -15,7 +16,7 @@ const DriverUpdates = ({ onBack, user }) => {
     });
     const [monthlyDrivers, setMonthlyDrivers] = useState([]);
     const [heatmapData, setHeatmapData] = useState(null);
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
+    const [selectedMonth, setSelectedMonth] = useState(getCurrentEDT().toISOString().slice(0, 7)); // YYYY-MM format
     const [isLoading, setIsLoading] = useState(true);
     const [isAutoUpdating, setIsAutoUpdating] = useState(false);
     const [autoUpdateResult, setAutoUpdateResult] = useState(null);
@@ -249,7 +250,7 @@ const DriverUpdates = ({ onBack, user }) => {
             
             try {
                 const lastUpdate = new Date(dateString);
-                const today = new Date();
+                const today = getCurrentEDT();
                 const diffTime = today - lastUpdate;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 return diffDays;

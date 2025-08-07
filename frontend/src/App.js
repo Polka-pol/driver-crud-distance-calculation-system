@@ -14,14 +14,30 @@ import AdminPage from './components/AdminPage';
 import DispatcherDashboard from './components/DispatcherDashboard';
 import DriverUpdates from './components/DriverUpdates';
 import MapPage from './components/MapPage';
+import ServerTime from './components/ServerTime';
 import { isAuthenticated, logout, getCurrentUser } from './utils/auth';
 import { apiClient } from './utils/apiClient';
 import { API_BASE_URL } from './config';
+import { getCurrentEDT } from './utils/timeUtils';
 import { useModalScrollLock } from './utils/modalScrollLock';
 
 function App() {
   const [user, setUser] = useState(getCurrentUser());
   const [isAuth, setIsAuth] = useState(isAuthenticated());
+  
+  // Additional user validation on component mount
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      // Validate user object has required fields
+      if (!currentUser.id) {
+        console.error('Invalid user object - missing ID:', currentUser);
+        logout();
+        return;
+      }
+      setUser(currentUser);
+    }
+  }, []);
   const [view, setView] = useState('main');
   const [trucks, setTrucks] = useState([]);
   const [distances, setDistances] = useState({});
@@ -56,8 +72,18 @@ function App() {
     driverName: null
   });
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
+  const [isTimeSyncing, setIsTimeSyncing] = useState(false);
 
   const handleLoginSuccess = (userData) => {
+    console.log('Login success - user data:', userData);
+    
+    // Validate user data
+    if (!userData || !userData.id) {
+      console.error('Invalid user data received during login:', userData);
+      alert('Login error: Invalid user data received. Please try again.');
+      return;
+    }
+    
     setUser(userData);
     setIsAuth(true);
   };
@@ -114,6 +140,13 @@ function App() {
 
     fetchTrucks();
     syncServerTime(); // Sync server time on page load
+    
+    // Sync server time every 5 minutes to keep it accurate
+    const timeSyncInterval = setInterval(syncServerTime, 5 * 60 * 1000);
+    
+    return () => {
+      clearInterval(timeSyncInterval);
+    };
   }, [isAuth]);
 
   // Prevent body scroll when comment modal is open
@@ -221,8 +254,8 @@ function App() {
           (truck.contactphone?.toLowerCase().includes(activeSearch.phone.toLowerCase()))
         );
 
-        // Add updated filter logic
-        const now = new Date();
+        // Add updated filter logic using EDT time
+        const now = getCurrentEDT();
         const truckDate = new Date(truck.arrival_time);
         let updatedMatch = true;
 
@@ -424,7 +457,11 @@ function App() {
     // Get user ID from different possible fields
     const userId = user.id || user.userId || user.user_id;
     if (!userId) {
+      console.error('User object:', user);
+      console.error('Current user from localStorage:', getCurrentUser());
       alert('User ID not found. Please log in again.');
+      // Force logout to refresh authentication
+      logout();
       return;
     }
 
@@ -472,7 +509,11 @@ function App() {
     // Get user ID from different possible fields
     const userId = user.id || user.userId || user.user_id;
     if (!userId) {
+      console.error('User object:', user);
+      console.error('Current user from localStorage:', getCurrentUser());
       alert('User ID not found. Please log in again.');
+      // Force logout to refresh authentication
+      logout();
       return;
     }
 
@@ -506,6 +547,7 @@ function App() {
 
   const syncServerTime = async () => {
     try {
+      setIsTimeSyncing(true);
       const response = await apiClient(`${API_BASE_URL}/trucks/hold/time`, {
         method: 'GET'
       });
@@ -514,13 +556,15 @@ function App() {
         const data = await response.json();
         if (data.success && data.server_time) {
           const serverTime = new Date(data.server_time);
-          const clientTime = new Date();
+          const clientTime = getCurrentEDT();
           const offset = serverTime.getTime() - clientTime.getTime();
           setServerTimeOffset(offset);
         }
       }
     } catch (error) {
       console.error('Failed to sync server time:', error);
+    } finally {
+      setIsTimeSyncing(false);
     }
   };
 
@@ -662,8 +706,11 @@ function App() {
           <div className="header-right">
             {user && (
               <div className="user-welcome">
-                <span className="user-name">{user.fullName}</span>
-                <span className="user-phone">{user.mobile_number || user.mobileNumber}</span>
+                <ServerTime serverTimeOffset={serverTimeOffset} isSyncing={isTimeSyncing} />
+                <div className="user-info">
+                  <span className="user-name">{user.fullName}</span>
+                  <span className="user-phone">{user.mobile_number || user.mobileNumber}</span>
+                </div>
               </div>
             )}
             <div className="header-actions">
@@ -865,3 +912,5 @@ function App() {
 }
 
 export default App;
+
+

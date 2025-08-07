@@ -6,6 +6,7 @@ use App\Core\Database;
 use App\Core\Logger;
 use App\Core\ActivityLogger;
 use App\Core\Auth;
+use App\Core\EDTTimeConverter;
 use App\Services\GeocoderService;
 use PDO;
 use PDOException;
@@ -107,7 +108,7 @@ class TruckController
 
             // Build dynamic update query based on provided fields
             $updateFields = [];
-            $dbData = ['ID' => $id, 'updated_by' => $currentUser];
+            $dbData = ['ID' => $id];
             
             // Map frontend field names to database column names
             $fieldMapping = [
@@ -195,8 +196,19 @@ class TruckController
                 }
             }
             
-            // Always update the updated_by field
-            $updateFields[] = "updated_by = :updated_by";
+            // Update the updated_by field and updated_at timestamp only if provided in the request
+            if (isset($data['updated_by'])) {
+                $updateFields[] = "updated_by = :updated_by";
+                $dbData['updated_by'] = $data['updated_by'];
+            } else {
+                // Default to current user if not provided
+                $updateFields[] = "updated_by = :updated_by";
+                $dbData['updated_by'] = $currentUser;
+            }
+            
+            // Always use current EDT time for updated_at
+            $updateFields[] = "updated_at = :updated_at";
+            $dbData['updated_at'] = EDTTimeConverter::getCurrentEDT();
             
             if (empty($updateFields)) {
                 self::sendResponse(['success' => false, 'message' => 'No fields to update.'], 400);
@@ -422,7 +434,7 @@ class TruckController
                 'Status' => $data['status'] ?? 'Available',
                 'CityStateZip' => $data['city_state_zip'] ?? null,
                 'comments' => $data['comment'] ?? null,
-                'WhenWillBeThere' => !empty($data['arrival_time']) ? $data['arrival_time'] : date('Y-m-d H:i:s'),
+                'WhenWillBeThere' => !empty($data['arrival_time']) ? $data['arrival_time'] : EDTTimeConverter::getCurrentEDT(),
                 'rate' => $data['loads_mark'] ?? null,
                 'mail' => $data['email'] ?? null,
                 'contactphone' => $data['contactphone'] ?? null,
@@ -709,13 +721,14 @@ class TruckController
             $updateStmt = $pdo->prepare("
                 UPDATE Trucks 
                 SET hold_status = 'active', 
-                    hold_started_at = NOW(), 
+                    hold_started_at = :edt_time, 
                     hold_dispatcher_id = :dispatcher_id, 
                     hold_dispatcher_name = :dispatcher_name
                 WHERE ID = :truck_id AND (hold_status IS NULL OR hold_status != 'active')
             ");
             
             $updateStmt->execute([
+                'edt_time' => EDTTimeConverter::getCurrentEDT(),
                 'dispatcher_id' => $dispatcherId,
                 'dispatcher_name' => $dispatcherName,
                 'truck_id' => $truckId
@@ -882,17 +895,17 @@ class TruckController
                 'hold_dispatcher_name' => $holdData['hold_dispatcher_name']
             ];
             
-            // Calculate time remaining if on active hold using server time
+            // Calculate time remaining if on active hold using EDT time
             if ($holdData['hold_status'] === 'active' && $holdData['hold_started_at']) {
                 $startTime = new \DateTime($holdData['hold_started_at']);
-                $now = new \DateTime(); // Server time
+                $now = new \DateTime(EDTTimeConverter::getCurrentEDT()); // EDT time
                 $elapsed = $now->diff($startTime);
                 $elapsedMinutes = ($elapsed->h * 60) + $elapsed->i;
                 $remainingMinutes = max(0, 15 - $elapsedMinutes);
                 
                 $holdInfo['remaining_minutes'] = $remainingMinutes;
                 $holdInfo['elapsed_minutes'] = $elapsedMinutes;
-                $holdInfo['server_time'] = $now->format('Y-m-d H:i:s');
+                $holdInfo['server_time'] = EDTTimeConverter::getCurrentEDT();
             }
             
             self::sendResponse(['success' => true, 'hold_info' => $holdInfo]);
@@ -911,9 +924,8 @@ class TruckController
         try {
             $pdo = Database::getConnection();
             
-            // Get current server time
-            $serverTimeStmt = $pdo->query("SELECT NOW() as server_time");
-            $serverTime = $serverTimeStmt->fetch(PDO::FETCH_ASSOC)['server_time'];
+            // Get current EDT time
+            $edtTime = EDTTimeConverter::getCurrentEDT();
             
             // Get all active holds with remaining time
             $holdsStmt = $pdo->prepare("
@@ -927,7 +939,7 @@ class TruckController
             $holdsInfo = [];
             foreach ($activeHolds as $hold) {
                 $startTime = new \DateTime($hold['hold_started_at']);
-                $now = new \DateTime($serverTime);
+                $now = new \DateTime($edtTime); // EDT time
                 $elapsed = $now->diff($startTime);
                 $elapsedMinutes = ($elapsed->h * 60) + $elapsed->i;
                 $remainingMinutes = max(0, 15 - $elapsedMinutes);
@@ -942,7 +954,7 @@ class TruckController
             
             self::sendResponse([
                 'success' => true, 
-                'server_time' => $serverTime,
+                'server_time' => $edtTime,
                 'holds' => $holdsInfo
             ]);
 

@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Core\Database;
 use App\Core\Auth;
 use App\Core\Logger;
+use App\Core\EDTTimeConverter;
 
 class LoadHierarchyController
 {
@@ -86,7 +87,7 @@ class LoadHierarchyController
             echo json_encode([
                 'loads' => $result,
                 'total' => count($result),
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => EDTTimeConverter::getCurrentEDT()
             ]);
 
         } catch (Exception $e) {
@@ -212,7 +213,7 @@ class LoadHierarchyController
                 ],
                 'drivers' => $result,
                 'total_drivers' => count($result),
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => EDTTimeConverter::getCurrentEDT()
             ]);
 
         } catch (Exception $e) {
@@ -307,7 +308,7 @@ class LoadHierarchyController
                 ],
                 'messages' => $result,
                 'total_messages' => count($result),
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => EDTTimeConverter::getCurrentEDT()
             ]);
 
         } catch (Exception $e) {
@@ -385,7 +386,7 @@ class LoadHierarchyController
             echo json_encode([
                 'message_id' => (int)$messageId,
                 'status' => 'sent',
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => EDTTimeConverter::getCurrentEDT()
             ]);
 
         } catch (Exception $e) {
@@ -453,7 +454,7 @@ class LoadHierarchyController
             echo json_encode([
                 'status' => $newStatus,
                 'message' => $action === 'accept' ? 'Offer accepted' : 'Offer rejected',
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => EDTTimeConverter::getCurrentEDT()
             ]);
 
         } catch (Exception $e) {

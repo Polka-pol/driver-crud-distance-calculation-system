@@ -15,11 +15,18 @@ const DispatcherDashboard = ({ onBack }) => {
             
             const response = await apiClient(url);
             if (!response.ok) {
-                throw new Error('Failed to fetch dispatcher dashboard data.');
+                // Get response text to see what the server actually returned
+                const errorText = await response.text();
+                console.error('Server error response:', errorText);
+                throw new Error(`Failed to fetch dispatcher dashboard data. Status: ${response.status}`);
             }
+            
+            // Try to parse response as JSON
             const data = await response.json();
+            
             setDashboardData(data);
         } catch (err) {
+            console.error('Dashboard fetch error:', err);
             setError(err.message);
         } finally {
             setIsLoading(false);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './DriverUpdates.css';
+import { getCurrentEDT } from '../utils/timeUtils';
 
 const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
     const [reason, setReason] = useState('');
@@ -7,9 +8,9 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
     const [comment, setComment] = useState('');
     const [showError, setShowError] = useState(false);
 
-    // Function to get today's date in YYYY-MM-DD format
+    // Function to get today's date in YYYY-MM-DD format using EDT
     const getTodayDate = () => {
-        const today = new Date();
+        const today = getCurrentEDT();
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');

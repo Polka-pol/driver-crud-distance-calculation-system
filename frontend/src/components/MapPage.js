@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import './MapPage.css';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
+import { getCurrentEDT } from '../utils/timeUtils';
 
 // Fix default markers for Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -90,7 +91,7 @@ function MapPage({ onBack, user }) {
       // Updated filter logic (same as in App.js)
       let updatedMatch = true;
       if (updatedFilter) {
-        const now = new Date();
+        const now = getCurrentEDT();
         const truckDate = new Date(truck.arrival_time);
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const truckDay = new Date(truckDate.getFullYear(), truckDate.getMonth(), truckDate.getDate());
