@@ -96,7 +96,12 @@ class DriverUpdatesController
             $params['dispatcher_id'] = $currentUser->id;
         } elseif ($view === 'unassigned') {
             $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
+        } elseif (is_numeric($view)) {
+            // View is a dispatcher ID
+            $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
+            $params['dispatcher_id'] = (int)$view;
         }
+        // For 'all' view, no additional filter is applied
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -153,7 +158,12 @@ class DriverUpdatesController
             $params['dispatcher_id'] = $currentUser->id;
         } elseif ($view === 'unassigned') {
             $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
+        } elseif (is_numeric($view)) {
+            // View is a dispatcher ID
+            $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
+            $params['dispatcher_id'] = (int)$view;
         }
+        // For 'all' view, no additional filter is applied
         
         $sql .= " ORDER BY WhenWillBeThere ASC";
         
@@ -450,7 +460,12 @@ class DriverUpdatesController
                 $params['dispatcher_id'] = $currentUser->id;
             } elseif ($view === 'unassigned') {
                 $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
+            } elseif (is_numeric($view)) {
+                // View is a dispatcher ID
+                $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
+                $params['dispatcher_id'] = (int)$view;
             }
+            // For 'all' view, no additional filter is applied
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
@@ -583,7 +598,12 @@ class DriverUpdatesController
                 $params['dispatcher_id'] = $currentUser->id;
             } elseif ($view === 'unassigned') {
                 $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
+            } elseif (is_numeric($view)) {
+                // View is a dispatcher ID
+                $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
+                $params['dispatcher_id'] = (int)$view;
             }
+            // For 'all' view, no additional filter is applied
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);

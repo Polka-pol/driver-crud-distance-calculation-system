@@ -23,6 +23,44 @@
     line-height: 1.6;
 }
 
+/* Стилі для обгортки з нумерацією рядків */
+.textarea-wrapper {
+    position: relative;
+    display: flex;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    overflow: hidden;
+}
+
+.line-numbers {
+    background: #f3f4f6;
+    color: #6b7280;
+    padding: 8px 6px 8px 8px;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    text-align: right;
+    min-width: 40px;
+    border-right: 1px solid #d1d5db;
+    user-select: none;
+    overflow-y: hidden;
+    white-space: pre;
+}
+
+.textarea-wrapper .phone-numbers-textarea {
+    border: none;
+    border-radius: 0;
+    padding: 8px;
+    flex: 1;
+    outline: none;
+    resize: vertical;
+}
+
+.textarea-wrapper .phone-numbers-textarea:focus {
+    box-shadow: none;
+}
+
 .copy-info {
     margin-top: 16px;
     padding: 12px;
@@ -94,6 +132,11 @@
     .copy-numbers-modal textarea {
         font-size: 13px;
         min-height: 100px;
+    }
+    
+    .line-numbers {
+        font-size: 13px;
+        min-width: 35px;
     }
     
     .copy-info {

@@ -8,7 +8,8 @@ import { getCurrentEDT } from '../utils/timeUtils';
 
 const DriverUpdates = ({ onBack, user }) => {
     const [activeTab, setActiveTab] = useState('daily');
-    const [view, setView] = useState('my'); // 'my' or 'all'
+    const [view, setView] = useState('all'); // Initialize to 'all' instead of null
+    const [dispatchers, setDispatchers] = useState([]);
     const [drivers, setDrivers] = useState({
         need_update: [],
         updated: [],
@@ -26,10 +27,36 @@ const DriverUpdates = ({ onBack, user }) => {
     const [showCopyNumbersModal, setShowCopyNumbersModal] = useState(false);
     const [driversToCopy, setDriversToCopy] = useState([]);
 
+    // Initialize default view based on user role
+    useEffect(() => {
+        if (user && user.role === 'dispatcher') {
+            setView(user.id.toString()); // Default to current dispatcher ID for dispatchers
+        }
+        // For other roles, keep the default 'all' value
+    }, [user]);
+
+    // Fetch dispatchers on component mount
+    useEffect(() => {
+        const fetchDispatchers = async () => {
+            try {
+                const response = await apiClient(`${API_BASE_URL}/users/dispatchers`);
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    setDispatchers(data);
+                }
+            } catch (err) {
+                console.error('Error fetching dispatchers:', err);
+            }
+        };
+
+        fetchDispatchers();
+    }, []);
+
     const autoUpdateDriverStatuses = useCallback(async () => {
         setIsAutoUpdating(true);
         try {
-            const response = await apiClient(`${API_BASE_URL}/driver-updates/auto-update?view=${view}`, {
+            const url = `${API_BASE_URL}/driver-updates/auto-update?view=${view}`;
+            const response = await apiClient(url, {
                 method: 'POST'
             });
             const data = await response.json();
@@ -178,8 +205,6 @@ const DriverUpdates = ({ onBack, user }) => {
         }
     }, [loadDriverStatuses]);
 
-
-
     const handleDeleteDriver = useCallback(async (driver) => {
         if (!window.confirm(`Are you sure you want to delete driver ${driver.DriverName} (Truck #${driver.TruckNumber})? This action cannot be undone.`)) {
             return;
@@ -233,7 +258,10 @@ const DriverUpdates = ({ onBack, user }) => {
         return hasUpdate ? '#22c55e' : '#e5e7eb'; // Green for updated, gray for not updated
     }, []);
 
-
+    // Handle view change
+    const handleViewChange = useCallback((newView) => {
+        setView(newView);
+    }, []);
 
     const DriversTable = useCallback(({ drivers, category, showActions = true }) => {
         // Sort drivers for monthly review (oldest first)
@@ -291,7 +319,7 @@ const DriverUpdates = ({ onBack, user }) => {
                                     <tr key={driver.ID}>
                                         <td className="truck-number-cell">#{driver.TruckNumber}</td>
                                         <td className="driver-name-cell">{driver.DriverName || 'No driver assigned'}</td>
-                                        <td className="phone-cell">{driver.CellPhone || driver.contactphone || 'N/A'}</td>
+                                        <td className="phone-cell">{driver.contactphone || driver.CellPhone || 'N/A'}</td>
                                         <td className="status-cell">{driver.Status || 'N/A'}</td>
                                         <td className="location-cell">{driver.CityStateZip || 'N/A'}</td>
                                         <td className="will-be-there-cell">
@@ -532,10 +560,14 @@ const DriverUpdates = ({ onBack, user }) => {
                 <div className="driver-updates-header-controls">
                     <div className="view-selector">
                         <label>View:</label>
-                        <select value={view} onChange={(e) => setView(e.target.value)}>
-                            <option value="my">My Drivers</option>
+                        <select value={view} onChange={(e) => handleViewChange(e.target.value)}>
                             <option value="all">All Drivers</option>
                             <option value="unassigned">Do Not Assigned</option>
+                            {dispatchers.map(dispatcher => (
+                                <option key={dispatcher.id} value={dispatcher.id}>
+                                    {dispatcher.full_name}
+                                </option>
+                            ))}
                         </select>
                     </div>
                     <button onClick={onBack} className="back-btn">
