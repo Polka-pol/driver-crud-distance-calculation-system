@@ -6,7 +6,7 @@ const AddressSearchBar = ({ query, onQueryChange, onSelect, placeholder, hideRec
     const [suggestions, setSuggestions] = useState([]);
     const [recentSearches, setRecentSearches] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [isLoadingRecent, setIsLoadingRecent] = useState(false);
+
     const [isSuggestionsVisible, setIsSuggestionsVisible] = useState(false);
     const [error, setError] = useState(null);
     const searchRef = useRef(null);
@@ -33,31 +33,31 @@ const AddressSearchBar = ({ query, onQueryChange, onSelect, placeholder, hideRec
         };
     }, [query]);
 
-    // Lazy loading for recent searches - triggers after suggestions are loaded
+    // Load recent searches alongside main suggestions to prevent flickering
     useEffect(() => {
-        if (suggestions.length > 0 && query.length >= 3 && currentQuery.current === query && !hideRecentInfo) {
-            setIsLoadingRecent(true);
-            
-            // Small delay to ensure suggestions are rendered first
-            const lazyHandler = setTimeout(async () => {
-                try {
-                    const recentResults = await getRecentSearches(query);
-                    // Only update if query hasn't changed
-                    if (currentQuery.current === query) {
-                        setRecentSearches(recentResults || []);
+        if (query.length >= 3 && !hideRecentInfo) {
+            // Load recent searches with same debounce timing as main suggestions
+            const handler = setTimeout(async () => {
+                if (currentQuery.current === query) {
+                    try {
+                        const recentResults = await getRecentSearches(query);
+                        // Only update if query hasn't changed
+                        if (currentQuery.current === query) {
+                            setRecentSearches(recentResults || []);
+                        }
+                    } catch (err) {
+                        console.warn('Error fetching recent searches:', err);
                     }
-                } catch (err) {
-                    console.warn('Error fetching recent searches:', err);
-                } finally {
-                    setIsLoadingRecent(false);
                 }
-            }, 100); // Small delay for lazy loading
+            }, 300); // Same debounce as main suggestions
 
             return () => {
-                clearTimeout(lazyHandler);
+                clearTimeout(handler);
             };
+        } else {
+            setRecentSearches([]);
         }
-    }, [suggestions, query, hideRecentInfo]);
+    }, [query, hideRecentInfo]);
 
     // Handle clicks outside the search bar to close suggestions
     useEffect(() => {
@@ -218,12 +218,7 @@ const AddressSearchBar = ({ query, onQueryChange, onSelect, placeholder, hideRec
                                             <span className="suggestion-meta">
                                                 {suggestion.flag} {suggestion.sourceLabel || suggestion.source}
                                             </span>
-                                            {/* Show loading indicator for recent searches */}
-                                            {isLoadingRecent && !recentInfo && !hideRecentInfo && (
-                                                <span className="recent-search-badge loading">
-                                                    <span className="loading-dots"></span>
-                                                </span>
-                                            )}
+
                                         </div>
                                     </div>
                                 </div>

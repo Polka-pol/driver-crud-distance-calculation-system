@@ -499,15 +499,8 @@ class DriverUpdatesController
                 
                 // Apply updates if any
                 if (!empty($updates)) {
-                    // Always update the updated_at and updated_by fields
-                    $updates[] = "updated_at = :updated_at";
-                    $updates[] = "updated_by = :updated_by";
-                    
                     $updateSql = "UPDATE Trucks SET " . implode(', ', $updates) . 
                                 " WHERE ID = :truck_id";
-                    
-                    $updateParams['updated_at'] = EDTTimeConverter::getCurrentEDT();
-                    $updateParams['updated_by'] = $currentUser->fullName ?? $currentUser->username ?? 'System';
                     
                     $updateStmt = $pdo->prepare($updateSql);
                     $updateStmt->execute($updateParams);

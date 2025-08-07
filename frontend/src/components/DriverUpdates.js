@@ -304,7 +304,7 @@ const DriverUpdates = ({ onBack, user }) => {
                                 <th>Phone</th>
                                 <th>Status</th>
                                 <th>Location</th>
-                                <th>{category === 'monthly_review' ? 'Last Updated' : 'Will Be There'}</th>
+                                <th>{category === 'monthly_review' ? 'Last Updated' : 'Updated'}</th>
                                 {category === 'monthly_review' && <th>Days Ago</th>}
                                 {category === 'no_need_update' && <th>Reason</th>}
                                 {category === 'no_need_update' && <th>Until Date</th>}

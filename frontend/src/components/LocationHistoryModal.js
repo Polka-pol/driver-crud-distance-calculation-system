@@ -6,7 +6,7 @@ import './LocationHistoryModal.css';
 
 const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverName }) => {
     const [history, setHistory] = useState([]);
-    const [loading, setLoading] = useState(false);
+
     const [error, setError] = useState(null);
     const [pagination, setPagination] = useState({
         current_page: 1,
@@ -17,7 +17,6 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
 
     const fetchLocationHistory = useCallback(async (page) => {
         try {
-            setLoading(true);
             setError(null);
             
             const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/location-history?page=${page}`);
@@ -30,8 +29,6 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
             setPagination(data.pagination);
         } catch (err) {
             setError(err.message);
-        } finally {
-            setLoading(false);
         }
     }, [truckId]);
 
@@ -76,26 +73,19 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                 </div>
                 
                 <div className="modal-body">
-                    {loading && (
-                        <div className="loading-spinner">
-                            <div className="spinner"></div>
-                            <p>Loading history...</p>
-                        </div>
-                    )}
-                    
                     {error && (
                         <div className="error-message">
                             <p>Error: {error}</p>
                         </div>
                     )}
                     
-                    {!loading && !error && history.length === 0 && (
+                    {!error && history.length === 0 && (
                         <div className="empty-state">
                             <p>No location change history available</p>
                         </div>
                     )}
                     
-                    {!loading && !error && history.length > 0 && (
+                    {!error && history.length > 0 && (
                         <div className="location-timeline">
                             {history.map((record, index) => (
                                 <div key={record.id} className="timeline-item">
@@ -112,7 +102,7 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                     )}
                 </div>
                 
-                {!loading && !error && pagination.total_pages > 1 && (
+                {!error && pagination.total_pages > 1 && (
                     <div className="modal-footer">
                         <div className="pagination">
                             <button 
