@@ -34,13 +34,11 @@ use App\Core\Database;
 use App\Controllers\TruckController;
 use App\Controllers\SearchController;
 use App\Controllers\DistanceController;
-use App\Controllers\LoadHierarchyController;
 use App\Controllers\AuthController;
 use App\Controllers\UserController;
 use App\Controllers\DashboardController;
 use App\Controllers\DispatcherDashboardController;
 use App\Controllers\DriverController;
-use App\Controllers\LoadOfferController;
 use App\Controllers\DriverUpdatesController;
 use App\Core\Auth;
 
@@ -319,6 +317,13 @@ if ($apiRoute === '/distance/cache-check' && $requestMethod === 'POST') {
     exit();
 }
 
+// Route for logging distance statistics
+if ($apiRoute === '/distance/log-stats' && $requestMethod === 'POST') {
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    (new App\Controllers\DistanceController())->logStats();
+    exit();
+}
+
 // User Management Routes (Protected for admins only)
 if ($apiRoute === '/users' && $requestMethod === 'GET') {
     Auth::protect(['admin']);
@@ -402,38 +407,7 @@ if ($apiRoute === '/driver/fcm-token' && $requestMethod === 'POST') {
     exit();
 }
 
-// Driver load offer routes
-if ($apiRoute === '/driver/load-offers' && $requestMethod === 'GET') {
-    LoadOfferController::getDriverOffers();
-    exit();
-}
 
-if ($apiRoute === '/driver/load-offers/respond' && $requestMethod === 'POST') {
-    LoadOfferController::respondToOffer();
-    exit();
-}
-
-// Dispatcher load management routes
-if ($apiRoute === '/loads' && $requestMethod === 'POST') {
-    LoadOfferController::createLoad();
-    exit();
-}
-
-if ($apiRoute === '/loads' && $requestMethod === 'GET') {
-    LoadOfferController::getAllLoadsWithOffers();
-    exit();
-}
-
-if ($apiRoute === '/loads/send-offers' && $requestMethod === 'POST') {
-    LoadOfferController::sendOfferToDrivers();
-    exit();
-}
-
-if (preg_match('/^\/loads\/(\d+)\/offers$/', $apiRoute, $matches) && $requestMethod === 'GET') {
-    $loadId = (int)$matches[1];
-    LoadOfferController::getLoadOffers($loadId);
-    exit();
-}
 
 // Driver status update route
 if ($apiRoute === '/driver/status' && $requestMethod === 'POST') {
@@ -441,45 +415,7 @@ if ($apiRoute === '/driver/status' && $requestMethod === 'POST') {
     exit();
 }
 
-// === NEW ROUTES FOR HIERARCHICAL INTERFACE ===
 
-// Level 1: List of all loads with summary information
-if ($apiRoute === '/loads/hierarchy' && $requestMethod === 'GET') {
-    Auth::protect(['dispatcher', 'manager', 'admin']);
-    (new LoadHierarchyController())->getLoadsHierarchy();
-    exit();
-}
-
-// Level 2: List of drivers for specific load
-if (preg_match('/^\/loads\/(\d+)\/drivers$/', $apiRoute, $matches) && $requestMethod === 'GET') {
-    $loadId = (int)$matches[1];
-    Auth::protect(['dispatcher', 'manager', 'admin']);
-    (new LoadHierarchyController())->getLoadDrivers($loadId);
-    exit();
-}
-
-// Level 3: Chat with specific driver
-if (preg_match('/^\/loads\/(\d+)\/drivers\/(\d+)\/chat$/', $apiRoute, $matches) && $requestMethod === 'GET') {
-    $loadId = (int)$matches[1];
-    $driverId = (int)$matches[2];
-    Auth::protect(['dispatcher', 'manager', 'admin']);
-    (new LoadHierarchyController())->getLoadDriverChat($loadId, $driverId);
-    exit();
-}
-
-// Send message to chat
-if ($apiRoute === '/chat/messages' && $requestMethod === 'POST') {
-    Auth::protect(['dispatcher', 'manager', 'admin']);
-    (new LoadHierarchyController())->sendMessage();
-    exit();
-}
-
-// Accept/reject driver offer
-if ($apiRoute === '/offers/respond' && $requestMethod === 'POST') {
-    Auth::protect(['dispatcher', 'manager', 'admin']);
-    (new LoadHierarchyController())->respondToOffer();
-    exit();
-}
 
 // === NEW ROUTES FOR DISTANCE WORK (USES driver_distances) ===
 

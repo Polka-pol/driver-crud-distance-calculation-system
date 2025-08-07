@@ -4,7 +4,9 @@ import './DistanceCell.css';
 // Memoized badge colors to prevent object recreation
 const BADGE_COLORS = {
   cache: '#4CAF50',
-  mapbox: '#2196F3'
+  mapbox: '#2196F3',
+  preliminary: '#FF9800',
+  'no-coords-available': '#9E9E9E' // Gray color for no coordinates available
 };
 
 // Conversion constant
@@ -20,7 +22,16 @@ const DistanceCell = React.memo(({ distanceData }) => {
   // Memoize the source text - always called
   const sourceText = useMemo(() => {
     if (!distanceData?.source) return null;
-    return distanceData.source.toUpperCase();
+    
+    // Map sources to shorter, clearer names
+    const sourceMap = {
+      'cache': 'CACHE',
+      'mapbox': 'MAPBOX',
+      'preliminary': 'APPROX',
+      'no-coords-available': 'NO GPS'
+    };
+    
+    return sourceMap[distanceData.source] || distanceData.source.toUpperCase();
   }, [distanceData?.source]);
 
   // Render empty state if no distance data

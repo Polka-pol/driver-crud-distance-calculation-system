@@ -125,11 +125,26 @@ class DistanceController
             return;
         }
 
-        // Always fetch from database to get coordinates - frontend doesn't provide them
-        $originQueries = $this->fetchOriginsFromDatabase();
+        // Check if origins are provided in the request (filtered by frontend)
+        if (isset($input['origins']) && !empty($input['origins'])) {
+            // Use filtered origins from frontend
+            $originQueries = $this->prepareOriginsFromFrontend($input['origins']);
+            Logger::info("Using filtered origins from frontend", [
+                'count' => count($originQueries),
+                'destination' => $destinationQuery
+            ]);
+        } else {
+            // Fallback: fetch all from database (for backward compatibility)
+            $originQueries = $this->fetchOriginsFromDatabase();
+            Logger::info("Using all origins from database", [
+                'count' => count($originQueries),
+                'destination' => $destinationQuery
+            ]);
+        }
+        
         if (empty($originQueries)) {
             http_response_code(404);
-            echo json_encode(['error' => 'No trucks found in database.']);
+            echo json_encode(['error' => 'No trucks found in request or database.']);
             return;
         }
 
@@ -354,8 +369,9 @@ class DistanceController
             // Prepare addresses for cache check (no geocoding here)
             $preparedAddresses = $this->prepareAddressesForCacheCheck($originQueries, $destinationQuery);
 
-            // STEP 1: Normalize destination once for cache lookup
+            // STEP 1: Normalize destination once for cache lookup and geocode it
             $normalizedToAddress = $this->normalizeAddress($destinationQuery);
+            $destinationCoords = $this->geocoder->getBestCoordinatesForLocation($destinationQuery);
             
             // STEP 2: Fast bulk cache check using prepared data
             $cacheMap = $this->cacheService->bulkCacheCheck($preparedAddresses, $normalizedToAddress);
@@ -374,11 +390,19 @@ class DistanceController
                 if (isset($cacheMap[$cacheKey])) {
                     $cachedResults[$driverId] = $cacheMap[$cacheKey];
                 } else {
-                    // Keep original structure for uncached origins
-                    $uncachedOrigins[] = [
+                    // Keep original structure for uncached origins with coordinates if available
+                    $uncachedItem = [
                         'id' => $driverId,
                         'address' => $originalAddress
                     ];
+                    
+                    // Add coordinates if available from prepared data
+                    if (isset($preparedOrigin['coordinates'])) {
+                        $uncachedItem['coordinates'] = $preparedOrigin['coordinates'];
+                        $uncachedItem['coordinate_source'] = $preparedOrigin['coordinate_source'] ?? 'database';
+                    }
+                    
+                    $uncachedOrigins[] = $uncachedItem;
                 }
             }
 
@@ -394,6 +418,7 @@ class DistanceController
             echo json_encode([
                 'cached' => $cachedResults,
                 'uncached' => $uncachedOrigins,
+                'destination_coordinates' => $destinationCoords,
                 'stats' => [
                     'total_drivers' => $totalDrivers,
                     'cache_hits' => $cacheHits,
@@ -821,26 +846,26 @@ class DistanceController
                 return;
             }
 
-            // Log to distance_log table
-            $this->logDistanceStats(
-                $stats['destination'],
-                $stats['total_drivers'],
-                $stats['cache_hits'],
-                $stats['uncached_count']
-            );
+            // Skip logging to distance_log here - will be handled by frontend's log-stats call
+            // $this->logDistanceStats(
+            //     $stats['destination'],
+            //     $stats['total_drivers'],
+            //     $stats['cache_hits'],
+            //     $stats['uncached_count']
+            // );
 
-            // Log to activity_logs table
-            $successfulDrivers = $stats['total_drivers'] - $stats['geocoding_failures'];
-            ActivityLogger::log('distance_batch_calculated', [
-                'destination' => $stats['destination'],
-                'total_drivers' => $stats['total_drivers'],
-                'cache_hits' => $stats['cache_hits'],
-                'mapbox_requests' => $stats['uncached_count'],
-                'geocoding_failures' => $stats['geocoding_failures'],
-                'cache_efficiency_percent' => $successfulDrivers > 0 ? 
-                    round(($stats['cache_hits'] / $successfulDrivers) * 100, 1) : 0,
-                'query_type' => 'cache_check_with_stats'
-            ]);
+            // Skip logging to activity_logs here too - will be handled by frontend's log-stats call
+            // $successfulDrivers = $stats['total_drivers'] - $stats['geocoding_failures'];
+            // ActivityLogger::log('distance_batch_calculated', [
+            //     'destination' => $stats['destination'],
+            //     'total_drivers' => $stats['total_drivers'],
+            //     'cache_hits' => $stats['cache_hits'],
+            //     'mapbox_requests' => $stats['uncached_count'],
+            //     'geocoding_failures' => $stats['geocoding_failures'],
+            //     'cache_efficiency_percent' => $successfulDrivers > 0 ? 
+            //         round(($stats['cache_hits'] / $successfulDrivers) * 100, 1) : 0,
+            //     'query_type' => 'cache_check_with_stats'
+            // ]);
 
         } catch (Exception $e) {
             // Even if logging fails, don't impact user experience
@@ -1368,6 +1393,125 @@ class DistanceController
     }
 
 
+
+    /**
+     * Prepare origins data from frontend request (filtered origins)
+     */
+    private function prepareOriginsFromFrontend(array $frontendOrigins): array
+    {
+        $origins = [];
+        
+        foreach ($frontendOrigins as $frontendOrigin) {
+            $origin = [
+                'id' => (int)$frontendOrigin['id'],
+                'address' => trim($frontendOrigin['address'])
+            ];
+            
+            // Add coordinates if provided by frontend
+            if (isset($frontendOrigin['coordinates']) && 
+                isset($frontendOrigin['coordinates']['lat']) && 
+                isset($frontendOrigin['coordinates']['lon'])) {
+                $origin['coordinates'] = [
+                    'lat' => (float)$frontendOrigin['coordinates']['lat'],
+                    'lon' => (float)$frontendOrigin['coordinates']['lon']
+                ];
+                $origin['coordinate_source'] = $frontendOrigin['coordinate_source'] ?? 'frontend';
+            } else {
+                // Try to get coordinates from database for this specific driver
+                try {
+                    $stmt = $this->pdo->prepare("SELECT latitude, longitude FROM Trucks WHERE ID = ? AND latitude IS NOT NULL AND longitude IS NOT NULL AND latitude != 0 AND longitude != 0");
+                    $stmt->execute([$frontendOrigin['id']]);
+                    $coords = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($coords) {
+                        $origin['coordinates'] = [
+                            'lat' => (float)$coords['latitude'],
+                            'lon' => (float)$coords['longitude']
+                        ];
+                        $origin['coordinate_source'] = 'database';
+                    } else {
+                        $origin['coordinate_source'] = 'needs_geocoding';
+                    }
+                } catch (Exception $e) {
+                    Logger::error("Failed to fetch coordinates for driver {$frontendOrigin['id']}", ['error' => $e->getMessage()]);
+                    $origin['coordinate_source'] = 'needs_geocoding';
+                }
+            }
+            
+            $origins[] = $origin;
+        }
+        
+        return $origins;
+    }
+
+    /**
+     * Log statistics from frontend (with correct breakdown of calculation types)
+     */
+    public function logStats()
+    {
+        Auth::protect(['dispatcher', 'manager', 'admin']);
+        
+        $input = json_decode(file_get_contents('php://input'), true);
+        
+        if (!$input || !isset($input['destination'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Missing required fields']);
+            return;
+        }
+        
+        $destination = $input['destination'];
+        $totalDrivers = $input['total_drivers'] ?? 0;
+        $cacheHits = $input['cache_hits'] ?? 0;
+        $preliminaryCalculations = $input['preliminary_calculations'] ?? 0;
+        $mapboxRequests = $input['mapbox_requests'] ?? 0;
+        
+        try {
+            $user = Auth::getCurrentUser();
+            if (!$user || !isset($user->id)) {
+                http_response_code(401);
+                echo json_encode(['error' => 'User not authenticated']);
+                return;
+            }
+
+            // Log to distance_log table with correct mapbox_requests count
+            $sql = "INSERT INTO distance_log (user_id, source_address, total_origins, cache_hits, mapbox_requests)
+                    VALUES (:user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests)";
+            
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([
+                ':user_id' => $user->id,
+                ':source_address' => $destination,
+                ':total_origins' => $totalDrivers,
+                ':cache_hits' => $cacheHits,
+                ':mapbox_requests' => $mapboxRequests
+            ]);
+
+            // Log to activity_logs table with detailed breakdown
+            $cacheEfficiency = $totalDrivers > 0 ? round(($cacheHits / $totalDrivers) * 100, 1) : 0;
+            
+            ActivityLogger::log('distance_batch_calculated', [
+                'destination' => $destination,
+                'total_drivers' => $totalDrivers,
+                'cache_hits' => $cacheHits,
+                'preliminary_calculations' => $preliminaryCalculations,
+                'mapbox_requests' => $mapboxRequests,
+                'cache_efficiency_percent' => $cacheEfficiency,
+                'query_type' => 'optimized_with_turf'
+            ]);
+
+            http_response_code(200);
+            echo json_encode(['success' => true, 'message' => 'Statistics logged successfully']);
+
+        } catch (Exception $e) {
+            Logger::error('Failed to log distance statistics', [
+                'error' => $e->getMessage(),
+                'destination' => $destination,
+                'stats' => $input
+            ]);
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to log statistics']);
+        }
+    }
 
     /**
      * Convert meters to miles

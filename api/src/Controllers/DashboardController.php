@@ -465,7 +465,11 @@ class DashboardController
                 $queryType = $details['query_type'] ?? 'unknown';
                 
                 // Show different info based on query type
-                if ($queryType === 'cache_check_with_stats') {
+                if ($queryType === 'optimized_with_turf') {
+                    $preliminaryCalculations = $details['preliminary_calculations'] ?? 0;
+                    $cacheEfficiency = $totalDrivers > 0 ? round(($cacheHits / $totalDrivers) * 100) : 0;
+                    $cacheInfo = " ({$totalDrivers} drivers: {$cacheHits} cached, {$preliminaryCalculations} approx, {$mapboxRequests} exact - {$cacheEfficiency}% cache efficiency)";
+                } elseif ($queryType === 'cache_check_with_stats') {
                     $cacheEfficiency = $totalDrivers > 0 ? round(($cacheHits / $totalDrivers) * 100) : 0;
                     $cacheInfo = " ({$totalDrivers} drivers: {$cacheHits} cached, {$mapboxRequests} from Mapbox - {$cacheEfficiency}% cache efficiency)";
                 } else {

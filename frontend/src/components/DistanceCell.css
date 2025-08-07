@@ -66,6 +66,14 @@
   background-color: #2196F3 !important;
 }
 
+.source-badge-preliminary {
+  background-color: #FF9800 !important;
+}
+
+.source-badge-no-coords-available {
+  background-color: #9E9E9E !important;
+}
+
 /* Optimize hover effects */
 .source-badge:hover {
   opacity: 0.9;

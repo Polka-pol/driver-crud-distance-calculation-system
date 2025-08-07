@@ -589,10 +589,19 @@ function App() {
           const updated = { ...prev };
           newDistances.forEach(d => {
               if (d.distance !== undefined && d.distance !== null) {
-                  updated[d.driverId] = {
-                      distance: d.distance,
-                      source: d.source
-                  };
+                  // Only update if there's no existing data, or if the new source is more accurate
+                  const existing = updated[d.driverId];
+                  const shouldUpdate = !existing || 
+                                     existing.source === 'no-coords-available' || 
+                                     (existing.source === 'preliminary' && d.source === 'mapbox') ||
+                                     existing.source === d.source; // Allow updates from same source
+                  
+                  if (shouldUpdate) {
+                      updated[d.driverId] = {
+                          distance: d.distance,
+                          source: d.source
+                      };
+                  }
               }
           });
           return updated;
