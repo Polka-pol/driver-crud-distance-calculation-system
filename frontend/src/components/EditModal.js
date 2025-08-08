@@ -107,13 +107,20 @@ const EditModal = ({
     setShowNoUpdateModal(false);
   };
 
+  const handleDeleteNoUpdate = () => {
+    if (onSetNoUpdate) {
+      onSetNoUpdate(editedTruck.id || editedTruck.ID, null); // null means delete
+    }
+    setShowNoUpdateModal(false);
+  };
+
   const openNoUpdateModal = () => {
     setShowNoUpdateModal(true);
   };
 
   // Check if user has permission to set no update
   const canSetNoUpdate = () => {
-    // Admin, manager, and dispatcher can always set no update
+    // Any dispatcher can set no update (removed assigned dispatcher restriction)
     if (userRole === 'admin' || userRole === 'manager' || userRole === 'dispatcher') {
       return true;
     }
@@ -353,9 +360,13 @@ const EditModal = ({
           ...editedTruck,
           ID: editedTruck.id,
           TruckNumber: editedTruck.truck_no,
-          DriverName: editedTruck.driver_name
+          DriverName: editedTruck.driver_name,
+          no_need_update_reason: editedTruck.no_need_update_reason,
+          no_need_update_until: editedTruck.no_need_update_until,
+          no_need_update_comment: editedTruck.no_need_update_comment
         }}
         onSave={handleSetNoUpdate}
+        onDelete={handleDeleteNoUpdate}
       />
     </div>
   );

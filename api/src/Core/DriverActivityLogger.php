@@ -4,6 +4,7 @@ namespace App\Core;
 
 use App\Core\Database;
 use App\Core\Logger;
+use App\Core\EDTTimeConverter;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use PDO;
@@ -32,7 +33,7 @@ class DriverActivityLogger
         // Create the driver_activity_logs table if it doesn't exist
         self::ensureTableExists();
 
-        $sql = "INSERT INTO driver_activity_logs (driver_id, action, details, created_at) VALUES (:driver_id, :action, :details, NOW())";
+        $sql = "INSERT INTO driver_activity_logs (driver_id, action, details, created_at) VALUES (:driver_id, :action, :details, :created_at)";
         
         try {
             $pdo = Database::getConnection();
@@ -41,7 +42,8 @@ class DriverActivityLogger
             $stmt->execute([
                 ':driver_id' => $finalDriverId,
                 ':action' => $action,
-                ':details' => json_encode($details)
+                ':details' => json_encode($details),
+                ':created_at' => EDTTimeConverter::getCurrentEDT()
             ]);
 
         } catch (PDOException $e) {

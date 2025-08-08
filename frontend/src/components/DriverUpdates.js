@@ -4,7 +4,7 @@ import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
 import UpdateStatusModal from './UpdateStatusModal';
 import CopyNumbersModal from './CopyNumbersModal';
-import { getCurrentEDT } from '../utils/timeUtils';
+import { getCurrentEDT, formatEDTDateTime } from '../utils/timeUtils';
 
 const DriverUpdates = ({ onBack, user }) => {
     const [activeTab, setActiveTab] = useState('daily');
@@ -26,13 +26,17 @@ const DriverUpdates = ({ onBack, user }) => {
     const [selectedTruck, setSelectedTruck] = useState(null);
     const [showCopyNumbersModal, setShowCopyNumbersModal] = useState(false);
     const [driversToCopy, setDriversToCopy] = useState([]);
+    const [isViewInitialized, setIsViewInitialized] = useState(false);
 
     // Initialize default view based on user role
     useEffect(() => {
-        if (user && user.role === 'dispatcher') {
-            setView(user.id.toString()); // Default to current dispatcher ID for dispatchers
+        if (user) {
+            if (user.role === 'dispatcher') {
+                setView(user.id.toString()); // Default to current dispatcher ID for dispatchers
+            }
+            // For admin and manager roles, keep the default 'all' value
+            setIsViewInitialized(true);
         }
-        // For other roles, keep the default 'all' value
     }, [user]);
 
     // Fetch dispatchers on component mount
@@ -128,12 +132,15 @@ const DriverUpdates = ({ onBack, user }) => {
 
     // Load data when component mounts or parameters change
     useEffect(() => {
+        // Only load data after view is initialized
+        if (!isViewInitialized) return;
+        
         if (activeTab === 'heatmap') {
             loadHeatmapData();
         } else {
             loadDriverStatuses();
         }
-    }, [activeTab, view, loadDriverStatuses, loadHeatmapData]);
+    }, [activeTab, view, loadDriverStatuses, loadHeatmapData, isViewInitialized]);
 
     const openModal = useCallback((truck) => {
         setSelectedTruck(truck);
@@ -239,19 +246,7 @@ const DriverUpdates = ({ onBack, user }) => {
     }, []);
 
     const formatWhenWillBeThere = useCallback((dateString) => {
-        if (!dateString) return 'Not set';
-        
-        try {
-            // Try to parse as date first
-            const date = new Date(dateString);
-            if (!isNaN(date.getTime())) {
-                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            } else {
-                return dateString; // Return as is if not a valid date
-            }
-        } catch {
-            return dateString;
-        }
+        return formatEDTDateTime(dateString);
     }, []);
 
     const getUpdateStatusColor = useCallback((hasUpdate) => {

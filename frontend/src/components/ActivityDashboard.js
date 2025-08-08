@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
+import { formatEDTTime, getRelativeTime } from '../utils/timeUtils';
 import './AdminPanel.css';
 
 const ActivityDashboard = () => {
@@ -8,6 +9,8 @@ const ActivityDashboard = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+
 
     useEffect(() => {
         const fetchAnalytics = async () => {
@@ -44,9 +47,9 @@ const ActivityDashboard = () => {
     
     const { summary, user_daily_stats, db_analytics, recent_activity } = analytics;
 
+    // Use centralized EDT time formatting
     const formatTime = (dateTimeString) => {
-        if (!dateTimeString) return 'N/A';
-        return new Date(dateTimeString).toLocaleTimeString();
+        return formatEDTTime(dateTimeString);
     };
 
     const getActionIcon = (action) => {
@@ -72,18 +75,9 @@ const ActivityDashboard = () => {
         }
     };
 
+    // Use centralized relative time calculation
     const formatRelativeTime = (dateString) => {
-        const now = new Date();
-        const activityTime = new Date(dateString);
-        const diffMs = now - activityTime;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        return `${diffDays}d ago`;
+        return getRelativeTime(dateString);
     };
 
 

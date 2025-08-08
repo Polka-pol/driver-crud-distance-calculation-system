@@ -118,6 +118,33 @@ function App() {
     }
   };
 
+  // Optimized refresh that preserves distance calculations
+  const handleHoldRefresh = async () => {
+    if (isRefreshing) return;
+    
+    try {
+      setIsRefreshing(true);
+      const response = await apiClient(`${API_BASE_URL}/trucks`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+      const data = await response.json();
+      setTrucks(data);
+      // NOTE: Distances are preserved - no setDistances({}) call
+      setError(null); // Clear any previous errors
+      
+      // Set updated state to show visual feedback
+      setIsUpdated(true);
+      setTimeout(() => {
+        setIsUpdated(false);
+      }, 2000); // Shorter timeout for hold operations
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     document.title = 'Connex Transport';
     if (!isAuth) return;
@@ -260,6 +287,7 @@ function App() {
         let updatedMatch = true;
 
         if (activeSearch.updated_filter) {
+          // Use EDT time for proper comparison
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           const truckDay = new Date(truckDate.getFullYear(), truckDate.getMonth(), truckDate.getDate());
           const diffDays = Math.floor((today - truckDay) / (1000 * 60 * 60 * 24));
@@ -394,6 +422,16 @@ function App() {
     }));
   };
 
+  // Sync editedTruck with updated trucks data
+  useEffect(() => {
+    if (editedTruck && trucks.length > 0) {
+      const updatedTruck = trucks.find(truck => truck.id === editedTruck.id);
+      if (updatedTruck && JSON.stringify(updatedTruck) !== JSON.stringify(editedTruck)) {
+        setEditedTruck(updatedTruck);
+      }
+    }
+  }, [trucks, editedTruck?.id, editedTruck]);
+
   const handleDelete = async (id) => {
     const truckToDelete = trucks.find(t => t.id === id);
     if (!truckToDelete) return;
@@ -429,17 +467,56 @@ function App() {
 
   const handleSetNoUpdate = async (truckId, modalData) => {
     try {
-      const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/update-no-need-status`, {
-        method: 'POST',
-        body: JSON.stringify(modalData)
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        // Refresh truck data to show updated status
-        await handleManualRefresh();
+      // If modalData is null, it means we want to delete the no update status
+      if (modalData === null) {
+        const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/clear-no-need-status`, {
+          method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          // Refresh truck data to show updated status (preserve distances if not status-related)
+          await handleManualRefresh();
+          // Update editedTruck to reflect the changes immediately
+          setEditedTruck(prevTruck => {
+            if (prevTruck && prevTruck.id === truckId) {
+              return {
+                ...prevTruck,
+                no_need_update_reason: null,
+                no_need_update_until: null,
+                no_need_update_comment: null
+              };
+            }
+            return prevTruck;
+          });
+        } else {
+          alert(data.message || 'Failed to clear status');
+        }
       } else {
-        alert(data.message || 'Failed to update status');
+        const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/update-no-need-status`, {
+          method: 'POST',
+          body: JSON.stringify(modalData)
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          // Refresh truck data to show updated status (preserve distances if not status-related)
+          await handleManualRefresh();
+          // Update editedTruck to reflect the changes immediately
+          setEditedTruck(prevTruck => {
+            if (prevTruck && prevTruck.id === truckId) {
+              return {
+                ...prevTruck,
+                no_need_update_reason: modalData.reason,
+                no_need_update_until: modalData.until_date,
+                no_need_update_comment: modalData.comment
+              };
+            }
+            return prevTruck;
+          });
+        } else {
+          alert(data.message || 'Failed to update status');
+        }
       }
     } catch (err) {
       console.error('Error updating status:', err);
@@ -477,8 +554,8 @@ function App() {
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
-          // Refresh truck data to show updated hold status
-          await handleManualRefresh();
+          // Refresh truck data to show updated hold status (preserve distances)
+          await handleHoldRefresh();
         } else {
           alert('Failed to place hold: ' + result.message);
         }
@@ -489,8 +566,8 @@ function App() {
         } else {
           alert('Truck is already on hold by another dispatcher. Please refresh the page to see the current status.');
         }
-        // Refresh data to show current hold status
-        await handleManualRefresh();
+        // Refresh data to show current hold status (preserve distances)
+        await handleHoldRefresh();
       } else {
         throw new Error('Failed to place hold');
       }
@@ -528,14 +605,14 @@ function App() {
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
-          // Refresh truck data to show updated hold status
-          await handleManualRefresh();
+          // Refresh truck data to show updated hold status (preserve distances)
+          await handleHoldRefresh();
         } else {
           alert('Failed to remove hold: ' + result.message);
         }
       } else if (response.status === 409) {
-        // Hold was already removed by another user, just refresh the data
-        await handleManualRefresh();
+        // Hold was already removed by another user, just refresh the data (preserve distances)
+        await handleHoldRefresh();
       } else {
         throw new Error('Failed to remove hold');
       }
@@ -845,7 +922,7 @@ function App() {
               currentUserId={user?.id || user?.userId || user?.user_id}
               onHoldClick={handlePlaceHold}
               onRemoveHold={handleRemoveHold}
-              onHoldExpired={handleManualRefresh}
+              onHoldExpired={handleHoldRefresh}
               serverTimeOffset={serverTimeOffset}
             />
 
@@ -891,6 +968,7 @@ function App() {
         {showNewDriverModal && (
           <NewDriverModal
             user={user}
+            trucks={trucks}
             onClose={() => setShowNewDriverModal(false)}
             onDriverAdded={handleAddNewDriver}
           />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
@@ -8,6 +8,7 @@ import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
 import AddressSearchBar from './AddressSearchBar';
 import { useModalScrollLock } from '../utils/modalScrollLock';
+import { validateEDTDate } from '../utils/timeUtils';
 
 const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
   <div style={{ position: "relative", width: "100%" }}>
@@ -34,7 +35,7 @@ const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
   </div>
 ));
 
-const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
+const NewDriverModal = ({ user, trucks, onClose, onDriverAdded }) => {
   const [newDriver, setNewDriver] = useState({
     truck_no: '',
     driver_name: '',
@@ -46,13 +47,43 @@ const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
     arrival_time: new Date(),
     loads_mark: '',
     dimensions_payload: '',
-    comment: ''
+    comment: '',
+    assigned_dispatcher_id: ''
   });
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [dispatchers, setDispatchers] = useState([]);
+  const [isLoadingDispatchers, setIsLoadingDispatchers] = useState(false);
 
   // Prevent body scroll when modal is open
   useModalScrollLock(true);
+
+  // Fetch dispatchers when modal opens
+  useEffect(() => {
+    fetchDispatchers();
+  }, []);
+
+  // Cleanup messages when modal closes
+  const handleClose = () => {
+    setError(null);
+    onClose();
+  };
+
+  const fetchDispatchers = async () => {
+    try {
+      setIsLoadingDispatchers(true);
+      const response = await apiClient(`${API_BASE_URL}/users/dispatchers`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch dispatchers');
+      }
+      const data = await response.json();
+      setDispatchers(data);
+    } catch (error) {
+      console.error('Error fetching dispatchers:', error);
+    } finally {
+      setIsLoadingDispatchers(false);
+    }
+  };
 
   // Phone number formatting function
   const formatPhoneNumber = (value) => {
@@ -87,16 +118,131 @@ const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
     setIsLoading(true);
     setError(null);
 
-    if (!newDriver.truck_no || !newDriver.driver_name || !newDriver.cell_phone) {
-      setError('Please fill in all required fields: Truck №, Driver Name, and Cell Phone.');
+    // Comprehensive validation with specific error messages
+    const validationErrors = [];
+
+    // Check if trucks array is available for duplicate checking
+    if (!trucks || !Array.isArray(trucks)) {
+      console.warn('Trucks array not available for duplicate checking');
+    }
+
+    if (!newDriver.truck_no || newDriver.truck_no.trim() === '') {
+      validationErrors.push('Truck № is required');
+    } else if (newDriver.truck_no.trim().length < 2) {
+      validationErrors.push('Truck № must be at least 2 characters');
+    }
+
+    if (!newDriver.driver_name || newDriver.driver_name.trim() === '') {
+      validationErrors.push('Driver Name is required');
+    } else if (newDriver.driver_name.trim().length < 2) {
+      validationErrors.push('Driver Name must be at least 2 characters');
+    }
+
+    if (!newDriver.cell_phone || newDriver.cell_phone.trim() === '') {
+      validationErrors.push('Cell Phone is required');
+    } else {
+      // Validate phone number format (should have at least 10 digits)
+      const phoneDigits = newDriver.cell_phone.replace(/\D/g, '');
+      if (phoneDigits.length < 10) {
+        validationErrors.push('Cell Phone must have at least 10 digits');
+      } else if (phoneDigits.length > 15) {
+        validationErrors.push('Cell Phone cannot have more than 15 digits');
+      }
+    }
+
+    // Validate email format if provided
+    if (newDriver.email && newDriver.email.trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(newDriver.email)) {
+        validationErrors.push('Please enter a valid email address (e.g., user@example.com)');
+      } else if (newDriver.email.length > 255) {
+        validationErrors.push('Email address is too long (maximum 255 characters)');
+      }
+    }
+
+    // Validate contact phone format if provided
+    if (newDriver.contact_phone && newDriver.contact_phone.trim() !== '') {
+      const contactPhoneDigits = newDriver.contact_phone.replace(/\D/g, '');
+      if (contactPhoneDigits.length < 10) {
+        validationErrors.push('Contact Phone must have at least 10 digits');
+      }
+    }
+
+    // Validate city_state_zip if provided
+    if (newDriver.city_state_zip && newDriver.city_state_zip.trim() !== '') {
+      if (newDriver.city_state_zip.trim().length < 5) {
+        validationErrors.push('City, State, Zip must be at least 5 characters');
+      }
+    }
+
+    // Validate loads_mark if provided
+    if (newDriver.loads_mark && newDriver.loads_mark.trim() !== '') {
+      if (newDriver.loads_mark.trim().length < 2) {
+        validationErrors.push('Loads/Mark must be at least 2 characters');
+      }
+    }
+
+    // Validate dimensions_payload if provided
+    if (newDriver.dimensions_payload && newDriver.dimensions_payload.trim() !== '') {
+      if (newDriver.dimensions_payload.trim().length < 3) {
+        validationErrors.push('Dimensions/Payload must be at least 3 characters');
+      }
+    }
+
+    // Validate arrival_time if provided using centralized EDT validation
+    if (newDriver.arrival_time) {
+      const validation = validateEDTDate(newDriver.arrival_time, 30, 365);
+      if (!validation.isValid) {
+        validationErrors.push(validation.error);
+      }
+    }
+
+    // Check for duplicate truck number (basic check)
+    if (newDriver.truck_no && newDriver.truck_no.trim() !== '' && trucks && Array.isArray(trucks)) {
+      const existingTruck = trucks.find(t => 
+        t.truck_no && t.truck_no.toString().toLowerCase() === newDriver.truck_no.trim().toLowerCase()
+      );
+      if (existingTruck) {
+        validationErrors.push(`Truck № ${newDriver.truck_no} already exists`);
+      }
+    }
+
+    // Check for duplicate cell phone (basic check)
+    if (newDriver.cell_phone && newDriver.cell_phone.trim() !== '' && trucks && Array.isArray(trucks)) {
+      const phoneDigits = newDriver.cell_phone.replace(/\D/g, '');
+      const existingPhone = trucks.find(t => 
+        t.cell_phone && t.cell_phone.replace(/\D/g, '') === phoneDigits
+      );
+      if (existingPhone) {
+        validationErrors.push(`Cell Phone ${newDriver.cell_phone} is already registered`);
+      }
+    }
+
+    // Check for duplicate contact phone if different from cell phone
+    if (newDriver.contact_phone && newDriver.contact_phone.trim() !== '' && 
+        newDriver.contact_phone !== newDriver.cell_phone && trucks && Array.isArray(trucks)) {
+      const contactPhoneDigits = newDriver.contact_phone.replace(/\D/g, '');
+      const existingContactPhone = trucks.find(t => 
+        t.contactphone && t.contactphone.replace(/\D/g, '') === contactPhoneDigits
+      );
+      if (existingContactPhone) {
+        validationErrors.push(`Contact Phone ${newDriver.contact_phone} is already registered`);
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      // Show only the first error to keep it compact
+      setError(validationErrors[0]);
       setIsLoading(false);
       return;
     }
 
     const driverData = {
       ...newDriver,
-      contactphone: newDriver.contact_phone, // Map contact_phone to contactphone
-      arrival_time: newDriver.arrival_time ? format(newDriver.arrival_time, "yyyy-MM-dd HH:mm:ss") : null
+      // Map contact_phone to contactphone for consistency with database
+      contactphone: newDriver.contact_phone,
+      // Format arrival_time consistently with EditModal
+      arrival_time: newDriver.arrival_time ? format(newDriver.arrival_time, "yyyy-MM-dd HH:mm") : null
     };
 
     try {
@@ -110,24 +256,54 @@ const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
         onDriverAdded(result.truck);
         onClose();
       } else {
-        setError(result.message || 'Failed to add new driver.');
+        // Handle specific API error messages
+        let errorMessage = result.message || 'Failed to add new driver.';
+        
+        // Map common API errors to user-friendly messages
+        if (result.message && result.message.includes('duplicate')) {
+          errorMessage = 'A driver with this truck number or phone number already exists.';
+        } else if (result.message && result.message.includes('validation')) {
+          errorMessage = 'Please check all required fields and try again.';
+        } else if (result.message && result.message.includes('database')) {
+          errorMessage = 'Database error. Please try again or contact support.';
+        }
+        
+        setError(errorMessage);
       }
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
+      console.error('Error creating driver:', err);
+      
+      // Handle network and other errors
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (err.message && err.message.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else if (err.message && err.message.includes('unauthorized')) {
+        errorMessage = 'Session expired. Please log in again.';
+      } else if (err.message && err.message.includes('Failed to fetch')) {
+        errorMessage = 'Unable to connect to server. Please check your internet connection.';
+      } else if (err.message && err.message.includes('CORS')) {
+        errorMessage = 'Cross-origin request blocked. Please contact support.';
+      } else if (err.message && err.message.includes('JSON')) {
+        errorMessage = 'Invalid response from server. Please try again.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={handleClose}>
       <div className="new-driver-modal-content" onClick={e => {
         if (e && e.stopPropagation) e.stopPropagation();
-        if (e && e.preventDefault) e.preventDefault();
       }}>
         <h2>Add New Driver</h2>
         <form onSubmit={handleSubmit} className="new-driver-form">
-          {error && <div className="form-error-message">{error}</div>}
+
           
           {/* Basic Information */}
           <div className="form-section">
@@ -166,6 +342,22 @@ const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
                 <option value="Unavailable">Unavailable</option>
                 <option value="Local">Local</option>
                 <option value="Out of service">Out of Service</option>
+              </select>
+            </div>
+            <div className="form-row">
+              <label>Assigned Dispatcher</label>
+              <select
+                value={newDriver.assigned_dispatcher_id}
+                onChange={e => handleChange('assigned_dispatcher_id', e.target.value)}
+                className="edit-input"
+                disabled={isLoadingDispatchers}
+              >
+                <option value="">Select Dispatcher</option>
+                {dispatchers.map(dispatcher => (
+                  <option key={dispatcher.id} value={dispatcher.id}>
+                    {dispatcher.full_name || dispatcher.username}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -281,12 +473,19 @@ const NewDriverModal = ({ user, onClose, onDriverAdded }) => {
           </div>
 
           <div className="form-actions">
-            <button type="button" className="cancel-btn" onClick={onClose} disabled={isLoading}>
-              Cancel
-            </button>
-            <button type="submit" className="save-btn" disabled={isLoading}>
-              {isLoading ? 'Saving...' : 'Add Driver'}
-            </button>
+            {error && (
+              <div className="error-message-inline">
+                ⚠️ {error}
+              </div>
+            )}
+            <div className="action-buttons">
+              <button type="button" className="cancel-btn" onClick={handleClose} disabled={isLoading}>
+                Cancel
+              </button>
+              <button type="submit" className="save-btn" disabled={isLoading}>
+                {isLoading ? 'Saving...' : 'Add Driver'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './DriverUpdates.css';
-import { getCurrentEDT } from '../utils/timeUtils';
+import { getCurrentEDT, formatEDTDate } from '../utils/timeUtils';
 
-const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
+const UpdateStatusModal = ({ show, onClose, truck, onSave, onDelete }) => {
     const [reason, setReason] = useState('');
     const [untilDate, setUntilDate] = useState('');
     const [comment, setComment] = useState('');
@@ -15,6 +15,11 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
+    };
+
+    // Check if truck has existing no update status
+    const hasExistingNoUpdate = () => {
+        return truck && (truck.no_need_update_reason || truck.no_need_update_until || truck.no_need_update_comment);
     };
 
     useEffect(() => {
@@ -48,6 +53,12 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
         });
     };
 
+    const handleDelete = () => {
+        if (onDelete) {
+            onDelete();
+        }
+    };
+
     return (
         <div className="driver-updates-modal-overlay" onClick={onClose}>
             <div className="driver-updates-modal-content" onClick={e => e.stopPropagation()}>
@@ -60,6 +71,28 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
                     {truck && (
                         <div className="selected-driver-info">
                             <strong>#{truck.TruckNumber || truck.truck_no} - {truck.DriverName || truck.driver_name}</strong>
+                        </div>
+                    )}
+
+                    {/* Show existing no update status if available */}
+                    {hasExistingNoUpdate() && (
+                        <div className="existing-no-update-info">
+                            <h4>Current No Update Status:</h4>
+                            <div className="existing-status-details">
+                                <div className="status-item">
+                                    <strong>Reason:</strong> {truck.no_need_update_reason || 'Not specified'}
+                                </div>
+                                {truck.no_need_update_until && (
+                                    <div className="status-item">
+                                        <strong>Until:</strong> {formatEDTDate(truck.no_need_update_until)}
+                                    </div>
+                                )}
+                                {truck.no_need_update_comment && (
+                                    <div className="status-item">
+                                        <strong>Comment:</strong> {truck.no_need_update_comment}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                     
@@ -107,15 +140,24 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave }) => {
                 </div>
                 
                 <div className="driver-updates-modal-footer">
-                    <button className="cancel-btn" onClick={onClose}>
-                        Cancel
-                    </button>
-                    <button 
-                        className="save-btn"
-                        onClick={handleSave}
-                    >
-                        Save
-                    </button>
+                    <div className="left-actions">
+                        {hasExistingNoUpdate() && onDelete && (
+                            <button className="delete-btn" onClick={handleDelete}>
+                                Remove No Update Status
+                            </button>
+                        )}
+                    </div>
+                    <div className="right-actions">
+                        <button className="cancel-btn" onClick={onClose}>
+                            Cancel
+                        </button>
+                        <button 
+                            className="save-btn"
+                            onClick={handleSave}
+                        >
+                            {hasExistingNoUpdate() ? 'Update' : 'Save'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

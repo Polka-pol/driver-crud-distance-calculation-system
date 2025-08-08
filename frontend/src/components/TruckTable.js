@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import DistanceCell from './DistanceCell';
 import StatusBadge from './StatusBadge';
 import HoldCell from './HoldCell';
+import { formatEDTDate, formatEDTDateMobile } from '../utils/timeUtils';
 import './TruckTable.css';
 
 // Conversion constant - same as in DistanceCell
@@ -49,44 +50,22 @@ const TruckTable = ({
     setExpandedCards(newExpandedCards);
   };
 
+  // Use centralized EDT time formatting
   const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return dateString;
-      
-      const yyyy = date.getFullYear();
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const dd = String(date.getDate()).padStart(2, '0');
-      const hh = String(date.getHours()).padStart(2, '0');
-      const min = String(date.getMinutes()).padStart(2, '0');
-      
-      return (
-        <div className="date-display">
-          <div className="date-part">{yyyy}-{mm}-{dd}</div>
-          <div className="time-part">{hh}:{min}</div>
-        </div>
-      );
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return dateString;
-    }
+    const formattedDate = formatEDTDate(dateString);
+    if (formattedDate === '-') return '-';
+    
+    const [datePart, timePart] = formattedDate.split(' ');
+    return (
+      <div className="date-display">
+        <div className="date-part">{datePart}</div>
+        <div className="time-part">{timePart}</div>
+      </div>
+    );
   };
 
   const formatDateMobile = (dateString) => {
-    if (!dateString) return '-';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return dateString;
-      
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const dd = String(date.getDate()).padStart(2, '0');
-      
-      return `${mm}.${dd}`;
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return dateString;
-    }
+    return formatEDTDateMobile(dateString);
   };
 
   const commentPreview = (comment) => {

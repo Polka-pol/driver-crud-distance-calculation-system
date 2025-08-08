@@ -60,7 +60,9 @@ class DashboardController
             $activityCountsStmt = $pdo->prepare("
                 SELECT 
                     COUNT(CASE WHEN action = 'distance_batch_calculated' 
-                          AND JSON_EXTRACT(details, '$.query_type') = 'cache_check_with_stats' THEN 1 END) as distance_calcs_count,
+                          AND (JSON_EXTRACT(details, '$.query_type') = 'optimized_with_turf' 
+                               OR JSON_EXTRACT(details, '$.query_type') = 'cache_check_with_stats')
+                          THEN 1 END) as distance_calcs_count,
                     COUNT(CASE WHEN action = 'truck_updated' THEN 1 END) as truck_updates_count
                 FROM activity_logs 
                 WHERE created_at >= ?
@@ -125,7 +127,9 @@ class DashboardController
                     MIN(a.created_at) as first_activity_today,
                     MAX(a.created_at) as last_activity_today,
                     COUNT(CASE WHEN a.action = 'distance_batch_calculated' 
-                          AND JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats' THEN 1 END) as distance_calcs_today,
+                          AND (JSON_EXTRACT(a.details, '$.query_type') = 'optimized_with_turf' 
+                               OR JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats')
+                          THEN 1 END) as distance_calcs_today,
                     COUNT(CASE WHEN a.action = 'truck_updated' THEN 1 END) as truck_updates_today,
                     COUNT(CASE WHEN a.action = 'truck_created' THEN 1 END) as truck_creates_today,
                     COUNT(CASE WHEN a.action = 'user_created' THEN 1 END) as user_creates_today

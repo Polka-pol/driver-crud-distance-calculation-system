@@ -460,8 +460,8 @@ class DistanceController
             return;
         }
 
-        $sql = "INSERT INTO distance_log (user_id, source_address, total_origins, cache_hits, mapbox_requests)
-                VALUES (:user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests)";
+        $sql = "INSERT INTO distance_log (user_id, source_address, total_origins, cache_hits, mapbox_requests, created_at)
+                VALUES (:user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests, :created_at)";
         
         try {
             $stmt = $this->pdo->prepare($sql);
@@ -470,7 +470,8 @@ class DistanceController
                 ':source_address' => $destination,
                 ':total_origins' => $totalOrigins,
                 ':cache_hits' => $cacheHits,
-                ':mapbox_requests' => $mapboxRequests
+                ':mapbox_requests' => $mapboxRequests,
+                ':created_at' => EDTTimeConverter::getCurrentEDT()
             ]);
         } catch (Exception $e) {
             Logger::error("Failed to log distance stats", ['error' => $e->getMessage()]);
@@ -1474,8 +1475,8 @@ class DistanceController
             }
 
             // Log to distance_log table with correct mapbox_requests count
-            $sql = "INSERT INTO distance_log (user_id, source_address, total_origins, cache_hits, mapbox_requests)
-                    VALUES (:user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests)";
+            $sql = "INSERT INTO distance_log (user_id, source_address, total_origins, cache_hits, mapbox_requests, created_at)
+                    VALUES (:user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests, :created_at)";
             
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([
@@ -1483,7 +1484,8 @@ class DistanceController
                 ':source_address' => $destination,
                 ':total_origins' => $totalDrivers,
                 ':cache_hits' => $cacheHits,
-                ':mapbox_requests' => $mapboxRequests
+                ':mapbox_requests' => $mapboxRequests,
+                ':created_at' => EDTTimeConverter::getCurrentEDT()
             ]);
 
             // Log to activity_logs table with detailed breakdown

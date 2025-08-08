@@ -38,7 +38,7 @@ class TruckController
                     CityStateZip, Dimensions, comments, ID,
                     updated_by, updated_at, latitude, longitude,
                     hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name,
-                    assigned_dispatcher_id
+                    assigned_dispatcher_id, no_need_update_reason, no_need_update_until, no_need_update_comment
                  FROM Trucks'
             );
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -73,7 +73,10 @@ class TruckController
                     'hold_started_at' => $row['hold_started_at'],
                     'hold_dispatcher_id' => $row['hold_dispatcher_id'],
                     'hold_dispatcher_name' => $row['hold_dispatcher_name'],
-                    'assigned_dispatcher_id' => $row['assigned_dispatcher_id']
+                    'assigned_dispatcher_id' => $row['assigned_dispatcher_id'],
+                    'no_need_update_reason' => $row['no_need_update_reason'],
+                    'no_need_update_until' => $row['no_need_update_until'],
+                    'no_need_update_comment' => $row['no_need_update_comment']
                 ];
             }, $results);
 
@@ -355,7 +358,8 @@ class TruckController
                         COALESCE(t.latitude, ac.lat) as lat,
                         COALESCE(t.longitude, ac.lon) as lon,
                         COALESCE(ac.formatted_address, t.CityStateZip) as formatted_address,
-                        t.hold_status, t.hold_started_at, t.hold_dispatcher_id, t.hold_dispatcher_name
+                        t.hold_status, t.hold_started_at, t.hold_dispatcher_id, t.hold_dispatcher_name,
+                        t.assigned_dispatcher_id
                      FROM Trucks t
                      LEFT JOIN address_cache ac ON t.CityStateZip = ac.search_query 
                         OR t.CityStateZip = ac.formatted_address
@@ -393,7 +397,8 @@ class TruckController
                     'hold_status' => $row['hold_status'],
                     'hold_started_at' => $row['hold_started_at'],
                     'hold_dispatcher_id' => $row['hold_dispatcher_id'],
-                    'hold_dispatcher_name' => $row['hold_dispatcher_name']
+                    'hold_dispatcher_name' => $row['hold_dispatcher_name'],
+                    'assigned_dispatcher_id' => $row['assigned_dispatcher_id']
                 ];
             }, $results);
 
@@ -426,6 +431,14 @@ class TruckController
         try {
             $pdo = Database::getConnection();
             
+            // Get user info from JWT token
+            $currentUser = 'Unknown User';
+            $userData = Auth::getCurrentUser();
+            
+            if ($userData && isset($userData->fullName)) {
+                $currentUser = $userData->fullName;
+            }
+            
             // Prepare base parameters
             $params = [
                 'TruckNumber' => $data['truck_no'],
@@ -439,6 +452,9 @@ class TruckController
                 'mail' => $data['email'] ?? null,
                 'contactphone' => $data['contactphone'] ?? null,
                 'Dimensions' => $data['dimensions_payload'] ?? null,
+                'assigned_dispatcher_id' => $data['assigned_dispatcher_id'] ?? null,
+                'updated_by' => $currentUser,
+                'updated_at' => EDTTimeConverter::getCurrentEDT(),
                 'latitude' => null, // Initialize with null
                 'longitude' => null // Initialize with null
             ];
@@ -503,7 +519,7 @@ class TruckController
             ActivityLogger::log('truck_created', ['truck_id' => $newTruckId, 'truck_number' => $data['truck_no']]);
 
             // Fetch the newly created truck to return it
-            $fetchStmt = $pdo->prepare("SELECT TruckNumber, rate, Status, WhenWillBeThere, DriverName, contactphone, CellPhone, mail, CityStateZip, Dimensions, comments, ID, updated_by, updated_at, latitude, longitude, hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name FROM Trucks WHERE ID = ?");
+            $fetchStmt = $pdo->prepare("SELECT TruckNumber, rate, Status, WhenWillBeThere, DriverName, contactphone, CellPhone, mail, CityStateZip, Dimensions, comments, ID, updated_by, updated_at, latitude, longitude, hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name, assigned_dispatcher_id FROM Trucks WHERE ID = ?");
             $fetchStmt->execute([$newTruckId]);
             $newTruck = $fetchStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -527,7 +543,8 @@ class TruckController
                 'hold_status' => $newTruck['hold_status'],
                 'hold_started_at' => $newTruck['hold_started_at'],
                 'hold_dispatcher_id' => $newTruck['hold_dispatcher_id'],
-                'hold_dispatcher_name' => $newTruck['hold_dispatcher_name']
+                'hold_dispatcher_name' => $newTruck['hold_dispatcher_name'],
+                'assigned_dispatcher_id' => $newTruck['assigned_dispatcher_id']
             ];
 
             self::sendResponse(['success' => true, 'message' => 'Truck created successfully.', 'truck' => $mappedTruck]);

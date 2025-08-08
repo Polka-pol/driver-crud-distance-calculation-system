@@ -304,9 +304,8 @@ class DriverUpdatesController
                 return;
             }
             
-            // Check if user has permission (assigned dispatcher, manager, or admin)
-            if ($currentUser->role !== 'admin' && $currentUser->role !== 'manager' && 
-                $truck['assigned_dispatcher_id'] != $currentUser->id) {
+            // Check if user has permission (any dispatcher, manager, or admin can set no update)
+            if ($currentUser->role !== 'admin' && $currentUser->role !== 'manager' && $currentUser->role !== 'dispatcher') {
                 self::sendResponse(['success' => false, 'message' => 'Access denied'], 403);
                 return;
             }
@@ -375,9 +374,8 @@ class DriverUpdatesController
                 return;
             }
             
-            // Check if user has permission
-            if ($currentUser->role !== 'admin' && $currentUser->role !== 'manager' && 
-                $truck['assigned_dispatcher_id'] != $currentUser->id) {
+            // Check if user has permission (any dispatcher, manager, or admin can clear no update)
+            if ($currentUser->role !== 'admin' && $currentUser->role !== 'manager' && $currentUser->role !== 'dispatcher') {
                 self::sendResponse(['success' => false, 'message' => 'Access denied'], 403);
                 return;
             }

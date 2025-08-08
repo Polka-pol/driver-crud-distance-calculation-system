@@ -92,23 +92,12 @@ class DispatcherDashboardController
 
     /**
      * Get today's statistics for all dispatchers
-     * Day counted from 6:00 AM to 6:00 AM server time
+     * Day counted from midnight to midnight
      */
     private static function getTodayStatsAllDispatchers($pdo)
     {
-        // Calculate the "working day" boundaries (6 AM to 6 AM) using EDT
-        $now = new \DateTime(EDTTimeConverter::getCurrentEDT());
-        $currentHour = (int)$now->format('H');
-        
-        if ($currentHour >= 6) {
-            // After 6 AM today, so working day is 6 AM today to 6 AM tomorrow
-            $workingDayStart = $now->format('Y-m-d') . ' 06:00:00';
-            $workingDayEnd = $now->modify('+1 day')->format('Y-m-d') . ' 06:00:00';
-        } else {
-            // Before 6 AM today, so working day is 6 AM yesterday to 6 AM today
-            $workingDayStart = $now->modify('-1 day')->format('Y-m-d') . ' 06:00:00';
-            $workingDayEnd = $now->modify('+1 day')->format('Y-m-d') . ' 06:00:00';
-        }
+        // Use standard day boundaries (midnight to midnight) using EDT
+        $todayDate = EDTTimeConverter::getCurrentEDTDate();
 
         $stmt = $pdo->prepare("
             SELECT 
@@ -117,21 +106,20 @@ class DispatcherDashboardController
                 u.full_name,
                 u.role,
                 COUNT(CASE WHEN a.action = 'distance_batch_calculated' 
-                      AND JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats' 
+                      AND (JSON_EXTRACT(a.details, '$.query_type') = 'optimized_with_turf' 
+                           OR JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats')
                       THEN 1 END) as today_calculations,
                 COUNT(CASE WHEN a.action = 'truck_updated' THEN 1 END) as today_updates
             FROM users u
             LEFT JOIN activity_logs a ON u.id = a.user_id 
-                AND a.created_at >= :start_time 
-                AND a.created_at < :end_time
+                AND DATE(CONVERT_TZ(a.created_at, '+00:00', 'America/New_York')) = :today_date
             WHERE u.role IN ('dispatcher', 'manager', 'admin')
             GROUP BY u.id, u.username, u.full_name, u.role
             ORDER BY today_calculations DESC, today_updates DESC, u.full_name ASC
         ");
         
         $stmt->execute([
-            ':start_time' => $workingDayStart,
-            ':end_time' => $workingDayEnd
+            ':today_date' => $todayDate
         ]);
         
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -164,7 +152,7 @@ class DispatcherDashboardController
         $lastDayOfMonth = clone $firstDayOfMonth;
         $lastDayOfMonth->modify('last day of this month');
         
-        // Get daily statistics for the month with 6AM-6AM logic
+        // Get daily statistics for the month with standard day boundaries
         $dailyStats = self::getMonthlyDailyStats($pdo, $dispatcherId, $firstDayOfMonth, $lastDayOfMonth);
         
         // Generate calendar grid
@@ -179,7 +167,7 @@ class DispatcherDashboardController
     }
 
     /**
-     * Get daily statistics for a month with 6AM-6AM working day logic
+     * Get daily statistics for a month with standard day boundaries
      */
     private static function getMonthlyDailyStats($pdo, $dispatcherId, $startDate, $endDate)
     {
@@ -187,27 +175,22 @@ class DispatcherDashboardController
         $current = clone $startDate;
         
         while ($current <= $endDate) {
-            $workingDayStart = $current->format('Y-m-d') . ' 06:00:00';
-            $workingDayEnd = clone $current;
-            $workingDayEnd->modify('+1 day');
-            $workingDayEnd = $workingDayEnd->format('Y-m-d') . ' 06:00:00';
             
             $stmt = $pdo->prepare("
                 SELECT 
                     COUNT(CASE WHEN a.action = 'distance_batch_calculated' 
-                          AND JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats' 
+                          AND (JSON_EXTRACT(a.details, '$.query_type') = 'optimized_with_turf' 
+                               OR JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats')
                           THEN 1 END) as calculations,
                     COUNT(CASE WHEN a.action = 'truck_updated' THEN 1 END) as updates
                 FROM activity_logs a
                 WHERE a.user_id = :user_id 
-                  AND a.created_at >= :start_time 
-                  AND a.created_at < :end_time
+                  AND DATE(CONVERT_TZ(a.created_at, '+00:00', 'America/New_York')) = :date
             ");
             
             $stmt->execute([
                 ':user_id' => $dispatcherId,
-                ':start_time' => $workingDayStart,
-                ':end_time' => $workingDayEnd
+                ':date' => $current->format('Y-m-d')
             ]);
             
             $result = $stmt->fetch(PDO::FETCH_ASSOC);

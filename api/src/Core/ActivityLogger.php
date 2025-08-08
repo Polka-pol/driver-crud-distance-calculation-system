@@ -4,6 +4,7 @@ namespace App\Core;
 
 use App\Core\Database;
 use App\Core\Auth; // To get the current user
+use App\Core\EDTTimeConverter;
 use PDO;
 use PDOException;
 
@@ -26,7 +27,7 @@ class ActivityLogger
             return;
         }
 
-        $sql = "INSERT INTO activity_logs (user_id, action, details) VALUES (:user_id, :action, :details)";
+        $sql = "INSERT INTO activity_logs (user_id, action, details, created_at) VALUES (:user_id, :action, :details, :created_at)";
         
         try {
             $pdo = Database::getConnection();
@@ -35,7 +36,8 @@ class ActivityLogger
             $stmt->execute([
                 ':user_id' => $user->id,
                 ':action' => $action,
-                ':details' => json_encode($details)
+                ':details' => json_encode($details),
+                ':created_at' => EDTTimeConverter::getCurrentEDT()
             ]);
 
         } catch (PDOException $e) {

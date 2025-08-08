@@ -527,10 +527,21 @@
 
 .driver-updates-modal-footer {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
     gap: 12px;
     padding: 20px;
     border-top: 1px solid #e5e7eb;
+}
+
+.driver-updates-modal-footer .left-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.driver-updates-modal-footer .right-actions {
+    display: flex;
+    gap: 8px;
 }
 
 .selected-driver-info {
@@ -540,6 +551,36 @@
     margin-bottom: 20px;
     color: #1f2937;
     font-size: 14px;
+}
+
+.existing-no-update-info {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.existing-no-update-info h4 {
+    margin: 0 0 12px 0;
+    color: #92400e;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.existing-status-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.status-item {
+    font-size: 13px;
+    color: #92400e;
+}
+
+.status-item strong {
+    font-weight: 600;
 }
 
 .form-group {
@@ -650,6 +691,23 @@
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+}
+
+.delete-btn {
+    padding: 10px 20px;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    height: 40px;
+}
+
+.delete-btn:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
 }
 
 /* Responsive Design */
