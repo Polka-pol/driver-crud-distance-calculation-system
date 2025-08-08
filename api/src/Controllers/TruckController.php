@@ -233,6 +233,30 @@ class TruckController
             $oldLocation = $currentTruckData['CityStateZip'] ?? null;
             $truckNumber = $currentTruckData['TruckNumber'] ?? 'unknown';
             
+            // ЗАПИСАТИ В ІСТОРІЮ (якщо є зміна локації) - ДО оновлення
+            if (isset($data['city_state_zip']) && !empty($data['city_state_zip'])) {
+                $newLocation = $data['city_state_zip'];
+                
+                // Записуємо навіть якщо oldLocation є null
+                if ($oldLocation !== $newLocation) {
+                    $oldLocationForLog = $oldLocation ?? 'No previous location';
+                    
+                    Logger::info('Location change detected', [
+                        'truck_id' => $id,
+                        'old_location' => $oldLocation,
+                        'new_location' => $newLocation,
+                        'will_log' => true
+                    ]);
+                    
+                    self::logLocationChange($pdo, $id, $truckNumber, $oldLocationForLog, $newLocation, $userData);
+                } else {
+                    Logger::info('Location unchanged', [
+                        'truck_id' => $id,
+                        'location' => $oldLocation
+                    ]);
+                }
+            }
+            
             $sql = "UPDATE Trucks SET " . implode(', ', $updateFields) . " WHERE ID = :ID";
             
 
@@ -246,18 +270,7 @@ class TruckController
                     return !in_array($field, ['ID', 'updated_by']);
                 });
                 
-                // Check if location was changed and log it
-                if (isset($data['city_state_zip'])) {
-                    $newLocation = $data['city_state_zip'];
-                    
-
-                    
-                    // Only log if location actually changed
-                    if ($oldLocation !== $newLocation && $oldLocation !== null) {
-
-                        self::logLocationChange($pdo, $id, $truckNumber, $oldLocation, $newLocation, $userData);
-                    }
-                }
+                // Location history already logged above, no need to check again
                 
                 ActivityLogger::log('truck_updated', [
                     'truck_id' => $id, 
@@ -592,12 +605,21 @@ class TruckController
                 'new_location' => $newLocation
             ]);
             
-
+            Logger::info('Location change logged successfully', [
+                'truck_id' => $truckId,
+                'truck_number' => $truckNumber,
+                'old_location' => $oldLocation,
+                'new_location' => $newLocation,
+                'changed_by' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User'
+            ]);
             
         } catch (PDOException $e) {
             Logger::error('Failed to log location change', [
                 'error' => $e->getMessage(),
-                'truck_id' => $truckId
+                'truck_id' => $truckId,
+                'old_location' => $oldLocation,
+                'new_location' => $newLocation,
+                'user_data' => $userData
             ]);
         }
     }

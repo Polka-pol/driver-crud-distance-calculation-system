@@ -234,6 +234,33 @@ class DriverController
         try {
             $pdo = Database::getConnection();
             
+            // ОТРИМАТИ СТАРЕ ЗНАЧЕННЯ (ДО оновлення)
+            $oldLocationStmt = $pdo->prepare("SELECT CityStateZip, TruckNumber FROM Trucks WHERE ID = :ID");
+            $oldLocationStmt->execute(['ID' => $driverData['id']]);
+            $oldLocationData = $oldLocationStmt->fetch(PDO::FETCH_ASSOC);
+            $oldLocation = $oldLocationData['CityStateZip'] ?? null;
+            $truckNumber = $oldLocationData['TruckNumber'] ?? 'unknown';
+            
+            // ЗАПИСАТИ В ІСТОРІЮ (якщо є зміна локації) - ДО оновлення
+            if (!empty($data['cityStateZip']) && $oldLocation !== $data['cityStateZip']) {
+                $oldLocationForLog = $oldLocation ?? 'No previous location';
+                
+                Logger::info('Driver location change detected', [
+                    'driver_id' => $driverData['id'],
+                    'old_location' => $oldLocation,
+                    'new_location' => $data['cityStateZip'],
+                    'will_log' => true
+                ]);
+                
+                // Використовуємо TruckController::logLocationChange
+                \App\Controllers\TruckController::logLocationChange($pdo, $driverData['id'], $truckNumber, $oldLocationForLog, $data['cityStateZip'], null);
+            } else {
+                Logger::info('Driver location unchanged', [
+                    'driver_id' => $driverData['id'],
+                    'location' => $oldLocation
+                ]);
+            }
+            
             $updateData = [
                 'CityStateZip' => $data['cityStateZip'],
                 'ID' => $driverData['id']

@@ -43,20 +43,21 @@ const EditModal = ({
   onClose, 
   onSave, 
   onDelete, 
-  onChange,
   onSetNoUpdate
 }) => {
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
   const [showNoUpdateModal, setShowNoUpdateModal] = useState(false);
   const [dispatchers, setDispatchers] = useState([]);
   const [isLoadingDispatchers, setIsLoadingDispatchers] = useState(false);
+  const [form, setForm] = useState(null);
 
   // Prevent body scroll when modal is open
   useModalScrollLock(!!editedTruck);
 
-  // Fetch dispatchers when modal opens
+  // Initialize local form state and fetch dispatchers when modal opens
   useEffect(() => {
     if (editedTruck) {
+      setForm({ ...editedTruck });
       fetchDispatchers();
     }
   }, [editedTruck]);
@@ -97,19 +98,19 @@ const EditModal = ({
 
   const handlePhoneChange = (field, value) => {
     const formattedValue = formatPhoneNumber(value);
-    onChange(field, formattedValue);
+    setForm(prev => ({ ...prev, [field]: formattedValue }));
   };
 
   const handleSetNoUpdate = (modalData) => {
     if (onSetNoUpdate) {
-      onSetNoUpdate(editedTruck.id || editedTruck.ID, modalData);
+      onSetNoUpdate((form?.id || form?.ID), modalData);
     }
     setShowNoUpdateModal(false);
   };
 
   const handleDeleteNoUpdate = () => {
     if (onSetNoUpdate) {
-      onSetNoUpdate(editedTruck.id || editedTruck.ID, null); // null means delete
+      onSetNoUpdate((form?.id || form?.ID), null); // null means delete
     }
     setShowNoUpdateModal(false);
   };
@@ -128,7 +129,7 @@ const EditModal = ({
     return false;
   };
 
-  if (!editedTruck) return null;
+  if (!editedTruck || !form) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -143,8 +144,8 @@ const EditModal = ({
           <div className="assigned-dispatcher-section">
             <label>Assigned Dispatcher:</label>
             <select
-              value={String(editedTruck.assigned_dispatcher_id || '')}
-              onChange={e => onChange('assigned_dispatcher_id', e.target.value)}
+              value={String(form.assigned_dispatcher_id || '')}
+              onChange={e => setForm(prev => ({ ...prev, assigned_dispatcher_id: e.target.value }))}
               className="dispatcher-select"
               disabled={isLoadingDispatchers}
             >
@@ -158,12 +159,12 @@ const EditModal = ({
           </div>
           
           {/* Last Modified Information - Compact */}
-          {(editedTruck.updated_by || editedTruck.updated_at) && (
+          {(form.updated_by || form.updated_at) && (
             <div className="last-modified-compact">
-              <div className="modified-by">{editedTruck.updated_by || 'Unknown User'}</div>
+              <div className="modified-by">{form.updated_by || 'Unknown User'}</div>
               <div className="modified-date">
-                {editedTruck.updated_at 
-                  ? formatEDTTime(editedTruck.updated_at)
+                {form.updated_at 
+                  ? formatEDTTime(form.updated_at)
                   : 'Unknown Date'
                 }
               </div>
@@ -177,8 +178,8 @@ const EditModal = ({
             <label>Truck №</label>
             <input
               type="text"
-              value={editedTruck.truck_no || ''}
-              onChange={e => onChange('truck_no', e.target.value)}
+              value={form.truck_no || ''}
+              onChange={e => setForm(prev => ({ ...prev, truck_no: e.target.value }))}
               className="edit-input"
               placeholder="Enter truck number"
               onFocus={(e) => e.target.select()}
@@ -187,12 +188,12 @@ const EditModal = ({
           <div className="edit-form-row">
             <label>Status</label>
             <select
-              value={editedTruck.status?.toLowerCase() || ''}
-              onChange={e => onChange('status', e.target.value)}
+              value={form.status?.toLowerCase() || ''}
+              onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
               className="edit-input"
             >
-              <option value={editedTruck.status?.toLowerCase() || ''} disabled hidden>
-                {editedTruck.status || 'Select status'}
+              <option value={form.status?.toLowerCase() || ''} disabled hidden>
+                {form.status || 'Select status'}
               </option>
               <option value="Available">Available</option>
               <option value="Available on">Available on</option>
@@ -206,8 +207,8 @@ const EditModal = ({
             <label>Driver name</label>
             <input
               type="text"
-              value={editedTruck.driver_name || ''}
-              onChange={e => onChange('driver_name', e.target.value)}
+              value={form.driver_name || ''}
+              onChange={e => setForm(prev => ({ ...prev, driver_name: e.target.value }))}
               className="edit-input"
               placeholder="Enter driver name"
               onFocus={(e) => e.target.select()}
@@ -216,9 +217,9 @@ const EditModal = ({
           <div className="edit-form-row">
             <label>City, State zipCode</label>
             <AddressSearchBar
-              query={editedTruck.city_state_zip || ''}
-              onQueryChange={(newQuery) => onChange('city_state_zip', newQuery)}
-              onSelect={(selectedAddress) => onChange('city_state_zip', selectedAddress)}
+              query={form.city_state_zip || ''}
+              onQueryChange={(newQuery) => setForm(prev => ({ ...prev, city_state_zip: newQuery }))}
+              onSelect={(selectedAddress) => setForm(prev => ({ ...prev, city_state_zip: selectedAddress }))}
               placeholder="Enter city, state and zip code"
               hideRecentInfo={true}
             />
@@ -229,8 +230,8 @@ const EditModal = ({
             <label>When will be there</label>
             <div className="date-picker-container">
               <DatePicker
-                selected={editedTruck.arrival_time ? new Date(editedTruck.arrival_time) : null}
-                onChange={date => onChange('arrival_time', date ? format(date, "yyyy-MM-dd HH:mm") : '')}
+                selected={form.arrival_time ? new Date(form.arrival_time) : null}
+                onChange={date => setForm(prev => ({ ...prev, arrival_time: date ? format(date, "yyyy-MM-dd HH:mm") : '' }))}
                 showTimeSelect
                 dateFormat="Pp"
                 customInput={<CustomDateInput />}
@@ -246,8 +247,7 @@ const EditModal = ({
                   const hours = String(nowEDT.getHours()).padStart(2, '0');
                   const minutes = String(nowEDT.getMinutes()).padStart(2, '0');
                   const edtDate = `${year}-${month}-${day} ${hours}:${minutes}`;
-                  onChange('arrival_time', edtDate);
-                  onChange('status', 'Available');
+                  setForm(prev => ({ ...prev, arrival_time: edtDate, status: 'Available' }));
                 }}
               >
                 NOW
@@ -257,8 +257,8 @@ const EditModal = ({
           <div className="edit-form-row full-width">
             <label>Comment</label>
             <textarea
-              value={editedTruck.comment || ''}
-              onChange={e => onChange('comment', e.target.value)}
+              value={form.comment || ''}
+              onChange={e => setForm(prev => ({ ...prev, comment: e.target.value }))}
               className="edit-textarea"
               placeholder="Enter any additional comments"
             />
@@ -281,8 +281,8 @@ const EditModal = ({
                 <label>Loads/Mark</label>
                 <input
                   type="text"
-                  value={editedTruck.loads_mark || ''}
-                  onChange={e => onChange('loads_mark', e.target.value)}
+                  value={form.loads_mark || ''}
+                  onChange={e => setForm(prev => ({ ...prev, loads_mark: e.target.value }))}
                   className="edit-input"
                   placeholder="Enter loads/mark"
                   onFocus={(e) => e.target.select()}
@@ -292,8 +292,8 @@ const EditModal = ({
                 <label>E-mail</label>
                 <input
                   type="email"
-                  value={editedTruck.email || ''}
-                  onChange={e => onChange('email', e.target.value)}
+                  value={form.email || ''}
+                  onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
                   className="edit-input"
                   placeholder="Enter email address"
                   onFocus={(e) => e.target.select()}
@@ -303,7 +303,7 @@ const EditModal = ({
                 <label>Contact phone</label>
                 <input
                   type="text"
-                  value={editedTruck.contactphone || ''}
+                  value={form.contactphone || ''}
                   onChange={e => handlePhoneChange('contactphone', e.target.value)}
                   className="edit-input"
                   placeholder="(000) 000-0000"
@@ -315,7 +315,7 @@ const EditModal = ({
                 <label>Cell phone</label>
                 <input
                   type="text"
-                  value={editedTruck.cell_phone || ''}
+                  value={form.cell_phone || ''}
                   onChange={e => handlePhoneChange('cell_phone', e.target.value)}
                   className="edit-input"
                   placeholder="(000) 000-0000"
@@ -327,8 +327,8 @@ const EditModal = ({
                 <label>Dimensions /Payload</label>
                 <input
                   type="text"
-                  value={editedTruck.dimensions_payload || ''}
-                  onChange={e => onChange('dimensions_payload', e.target.value)}
+                  value={form.dimensions_payload || ''}
+                  onChange={e => setForm(prev => ({ ...prev, dimensions_payload: e.target.value }))}
                   className="edit-input"
                   placeholder="Enter dimensions/payload"
                   onFocus={(e) => e.target.select()}
@@ -340,14 +340,14 @@ const EditModal = ({
           {/* Action Buttons */}
           <div className="edit-form-actions">
             <div className="left-actions">
-              <button onClick={() => onDelete(editedTruck.id)} className="delete-btn">Delete</button>
+              <button onClick={() => onDelete(form.id)} className="delete-btn">Delete</button>
               {canSetNoUpdate() && (
                 <button onClick={openNoUpdateModal} className="btn btn-primary">Set No Update</button>
               )}
             </div>
             <div className="right-actions">
               <button onClick={onClose} className="cancel-btn">Cancel</button>
-              <button onClick={onSave} className="save-btn">Save Changes</button>
+              <button onClick={() => onSave(form)} className="save-btn">Save Changes</button>
             </div>
           </div>
         </div>
@@ -357,13 +357,13 @@ const EditModal = ({
         show={showNoUpdateModal}
         onClose={() => setShowNoUpdateModal(false)}
         truck={{
-          ...editedTruck,
-          ID: editedTruck.id,
-          TruckNumber: editedTruck.truck_no,
-          DriverName: editedTruck.driver_name,
-          no_need_update_reason: editedTruck.no_need_update_reason,
-          no_need_update_until: editedTruck.no_need_update_until,
-          no_need_update_comment: editedTruck.no_need_update_comment
+          ...form,
+          ID: form.id,
+          TruckNumber: form.truck_no,
+          DriverName: form.driver_name,
+          no_need_update_reason: form.no_need_update_reason,
+          no_need_update_until: form.no_need_update_until,
+          no_need_update_comment: form.no_need_update_comment
         }}
         onSave={handleSetNoUpdate}
         onDelete={handleDeleteNoUpdate}

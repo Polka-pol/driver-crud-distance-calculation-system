@@ -327,13 +327,13 @@ function App() {
     setCurrentPage(newPage);
   };
 
-  const handleEditSubmit = async () => {
+  const handleEditSubmit = async (formData) => {
     try {
       // Compare editedTruck with originalTruck to find changed fields
       const changedFields = {};
       
-      if (originalTruck && editedTruck) {
-        Object.keys(editedTruck).forEach(key => {
+      if (originalTruck && formData) {
+        Object.keys(formData).forEach(key => {
           // Skip internal fields that shouldn't be sent to API
           if (['id', 'updated_by', 'updated_at'].includes(key)) {
             return;
@@ -341,7 +341,7 @@ function App() {
           
           // Compare values, handling null/undefined cases
           const originalValue = originalTruck[key] || '';
-          const editedValue = editedTruck[key] || '';
+          const editedValue = formData[key] || '';
           
           // Convert to string for comparison to handle number/string mismatches
           const originalStr = String(originalValue);
@@ -363,7 +363,7 @@ function App() {
       
       // Add the truck ID to the payload
       const updatePayload = {
-        id: editedTruck.id,
+        id: formData.id,
         ...changedFields
       };
       
@@ -375,7 +375,7 @@ function App() {
       if (res.success) {
         setTrucks(prevTrucks => 
           prevTrucks.map(truck => 
-            truck.id === editedTruck.id ? editedTruck : truck
+            truck.id === formData.id ? { ...truck, ...changedFields } : truck
           )
         );
         setEditModal(null);
@@ -413,24 +413,17 @@ function App() {
     });
   };
 
-  const handleEditChange = (field, value) => {
-    if (field === 'arrival_time' && value) {
-    }
-    setEditedTruck(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
+  // Removed: local field changes are handled inside EditModal's local state
 
-  // Sync editedTruck with updated trucks data
+  // Sync editedTruck with updated trucks data only when not actively editing
   useEffect(() => {
-    if (editedTruck && trucks.length > 0) {
+    if (editedTruck && trucks.length > 0 && !editModal) {
       const updatedTruck = trucks.find(truck => truck.id === editedTruck.id);
       if (updatedTruck && JSON.stringify(updatedTruck) !== JSON.stringify(editedTruck)) {
         setEditedTruck(updatedTruck);
       }
     }
-  }, [trucks, editedTruck?.id, editedTruck]);
+  }, [trucks, editedTruck, editModal]);
 
   const handleDelete = async (id) => {
     const truckToDelete = trucks.find(t => t.id === id);
@@ -960,7 +953,6 @@ function App() {
             }}
             onSave={handleEditSubmit}
             onDelete={handleDelete}
-            onChange={handleEditChange}
             onSetNoUpdate={handleSetNoUpdate}
           />
         )}
