@@ -226,34 +226,57 @@ class TruckController
 
             $pdo = Database::getConnection();
             
-            // Get current truck data BEFORE update for location change detection
-            $currentTruckStmt = $pdo->prepare("SELECT TruckNumber, CityStateZip FROM Trucks WHERE ID = :ID");
+            // Get current truck data BEFORE update for change detection
+            $currentTruckStmt = $pdo->prepare("SELECT TruckNumber, CityStateZip, WhenWillBeThere, Status FROM Trucks WHERE ID = :ID");
             $currentTruckStmt->execute(['ID' => $id]);
             $currentTruckData = $currentTruckStmt->fetch(PDO::FETCH_ASSOC);
-            $oldLocation = $currentTruckData['CityStateZip'] ?? null;
             $truckNumber = $currentTruckData['TruckNumber'] ?? 'unknown';
             
-            // ЗАПИСАТИ В ІСТОРІЮ (якщо є зміна локації) - ДО оновлення
-            if (isset($data['city_state_zip']) && !empty($data['city_state_zip'])) {
+            // Track changes for extended logging - always log if any tracked field is being updated
+            $changes = [];
+            $shouldLog = false;
+            
+            // Always capture current state for all tracked fields
+            $currentLocation = $currentTruckData['CityStateZip'] ?? null;
+            $currentWhenWillBeThere = $currentTruckData['WhenWillBeThere'] ?? null;
+            $currentStatus = $currentTruckData['Status'] ?? null;
+            
+            // Check location change
+            if (isset($data['city_state_zip'])) {
                 $newLocation = $data['city_state_zip'];
+                $shouldLog = true;
                 
-                // Записуємо навіть якщо oldLocation є null
-                if ($oldLocation !== $newLocation) {
-                    $oldLocationForLog = $oldLocation ?? 'No previous location';
-                    
-                    Logger::info('Location change detected', [
-                        'truck_id' => $id,
-                        'old_location' => $oldLocation,
-                        'new_location' => $newLocation,
-                        'will_log' => true
-                    ]);
-                    
-                    self::logLocationChange($pdo, $id, $truckNumber, $oldLocationForLog, $newLocation, $userData);
-                } else {
-                    Logger::info('Location unchanged', [
-                        'truck_id' => $id,
-                        'location' => $oldLocation
-                    ]);
+                if ($currentLocation !== $newLocation) {
+                    $changes['location'] = [
+                        'old' => $currentLocation,
+                        'new' => $newLocation
+                    ];
+                }
+            }
+            
+            // Check whenwillbethere change
+            if (isset($data['arrival_time'])) {
+                $newWhenWillBeThere = $data['arrival_time'];
+                $shouldLog = true;
+                
+                if ($currentWhenWillBeThere !== $newWhenWillBeThere) {
+                    $changes['whenwillbethere'] = [
+                        'old' => $currentWhenWillBeThere,
+                        'new' => $newWhenWillBeThere
+                    ];
+                }
+            }
+            
+            // Check status change
+            if (isset($data['status'])) {
+                $newStatus = $data['status'];
+                $shouldLog = true;
+                
+                if ($currentStatus !== $newStatus) {
+                    $changes['status'] = [
+                        'old' => $currentStatus,
+                        'new' => $newStatus
+                    ];
                 }
             }
             
@@ -264,13 +287,30 @@ class TruckController
             $stmt->execute($dbData);
 
             if ($stmt->rowCount() > 0) {
+                // Log extended changes if any tracked field was updated
+                if ($shouldLog) {
+                    // Prepare all current values for logging
+                    $allCurrentValues = [
+                        'location' => isset($data['city_state_zip']) ? $data['city_state_zip'] : $currentLocation,
+                        'whenwillbethere' => isset($data['arrival_time']) ? $data['arrival_time'] : $currentWhenWillBeThere,
+                        'status' => isset($data['status']) ? $data['status'] : $currentStatus
+                    ];
+                    
+                    Logger::info('Logging extended changes with all current values', [
+                        'truck_id' => $id,
+                        'changes' => $changes,
+                        'all_current_values' => $allCurrentValues,
+                        'changed_fields' => array_keys($changes)
+                    ]);
+                    
+                    self::logExtendedChange($pdo, $id, $truckNumber, $changes, $allCurrentValues, $userData);
+                }
+                
                 $updatedFields = array_keys($dbData);
                 // Remove internal fields from the log
                 $updatedFields = array_filter($updatedFields, function($field) {
                     return !in_array($field, ['ID', 'updated_by']);
                 });
-                
-                // Location history already logged above, no need to check again
                 
                 ActivityLogger::log('truck_updated', [
                     'truck_id' => $id, 
@@ -576,40 +616,55 @@ class TruckController
     /**
      * Log location change to truck_location_history table
      */
-    private static function logLocationChange($pdo, $truckId, $truckNumber, $oldLocation, $newLocation, $userData)
+    private static function logExtendedChange($pdo, $truckId, $truckNumber, $changes, $allCurrentValues, $userData)
     {
         try {
             $sql = "INSERT INTO truck_location_history (
-                        truck_id, truck_number, old_location, new_location, 
+                        truck_id, truck_number, 
+                        old_location, new_location,
+                        old_whenwillbethere, new_whenwillbethere,
+                        old_status, new_status,
+                        changed_fields,
                         changed_by_user_id, changed_by_username, created_at
                     ) VALUES (
-                        :truck_id, :truck_number, :old_location, :new_location,
-                        :changed_by_user_id, :changed_by_username, NOW()
+                        :truck_id, :truck_number,
+                        :old_location, :new_location,
+                        :old_whenwillbethere, :new_whenwillbethere,
+                        :old_status, :new_status,
+                        :changed_fields,
+                        :changed_by_user_id, :changed_by_username, :created_at
                     )";
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 ':truck_id' => $truckId,
                 ':truck_number' => $truckNumber,
-                ':old_location' => $oldLocation,
-                ':new_location' => $newLocation,
+                // Always log current values, use changed values if available, otherwise use current values
+                ':old_location' => $changes['location']['old'] ?? $allCurrentValues['location'],
+                ':new_location' => $changes['location']['new'] ?? $allCurrentValues['location'],
+                ':old_whenwillbethere' => $changes['whenwillbethere']['old'] ?? $allCurrentValues['whenwillbethere'],
+                ':new_whenwillbethere' => $changes['whenwillbethere']['new'] ?? $allCurrentValues['whenwillbethere'],
+                ':old_status' => $changes['status']['old'] ?? $allCurrentValues['status'],
+                ':new_status' => $changes['status']['new'] ?? $allCurrentValues['status'],
+                ':changed_fields' => json_encode(array_keys($changes)),
                 ':changed_by_user_id' => $userData ? ($userData->id ?? null) : null,
-                ':changed_by_username' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User'
+                ':changed_by_username' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User',
+                ':created_at' => EDTTimeConverter::getCurrentEDT()
             ]);
             
             // Also log to activity_logs for dashboard
-            ActivityLogger::log('truck_location_changed', [
+            ActivityLogger::log('truck_extended_change', [
                 'truck_id' => $truckId,
                 'truck_number' => $truckNumber,
-                'old_location' => $oldLocation,
-                'new_location' => $newLocation
+                'changes' => $changes,
+                'changed_fields' => array_keys($changes)
             ]);
             
-            Logger::info('Location change logged successfully', [
+            Logger::info('Extended change logged successfully', [
                 'truck_id' => $truckId,
                 'truck_number' => $truckNumber,
-                'old_location' => $oldLocation,
-                'new_location' => $newLocation,
+                'changes' => $changes,
+                'changed_fields' => array_keys($changes),
                 'changed_by' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User'
             ]);
             
@@ -646,7 +701,11 @@ class TruckController
             
             // Get location history with pagination
             $sql = "SELECT 
-                        id, truck_id, truck_number, old_location, new_location,
+                        id, truck_id, truck_number, 
+                        old_location, new_location,
+                        old_whenwillbethere, new_whenwillbethere,
+                        old_status, new_status,
+                        changed_fields,
                         changed_by_user_id, changed_by_username, created_at
                     FROM truck_location_history 
                     WHERE truck_id = :truck_id 
@@ -660,6 +719,16 @@ class TruckController
             $stmt->execute();
             
             $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Process JSON fields and format data
+            $history = array_map(function($record) {
+                // Decode JSON changed_fields if present
+                if (!empty($record['changed_fields'])) {
+                    $record['changed_fields'] = json_decode($record['changed_fields'], true);
+                }
+                
+                return $record;
+            }, $history);
             
             // Get total count for pagination
             $countStmt = $pdo->prepare("SELECT COUNT(*) as total FROM truck_location_history WHERE truck_id = :truck_id");
@@ -999,6 +1068,176 @@ class TruckController
 
         } catch (PDOException $e) {
             Logger::error('Failed to get server time and holds', ['error' => $e->getMessage()]);
+            self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
+        }
+    }
+
+    /**
+     * Get comprehensive truck activity history including location changes, status changes, and WhenWillBeThere updates
+     */
+    public static function getTruckActivityHistory($truckId, $page = 1, $limit = 10)
+    {
+        try {
+            // Log the pagination parameters for debugging
+            Logger::info('getTruckActivityHistory called', [
+                'truck_id' => $truckId,
+                'page' => $page,
+                'limit' => $limit
+            ]);
+            
+            $pdo = Database::getConnection();
+            
+            // Validate truck exists
+            $truckStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
+            $truckStmt->execute(['ID' => $truckId]);
+            $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$truckData) {
+                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                return;
+            }
+            
+            $offset = ($page - 1) * $limit;
+            
+            // Get location history
+            $locationSql = "SELECT 
+                                id, truck_id, truck_number, old_location, new_location,
+                                changed_by_user_id, changed_by_username, created_at,
+                                'location_change' as activity_type
+                            FROM truck_location_history 
+                            WHERE truck_id = :location_truck_id";
+            
+            // Get status and WhenWillBeThere changes from activity_logs
+            $activitySql = "SELECT 
+                                al.id, al.id as truck_id, al.id as truck_number, 
+                                al.id as old_location, al.id as new_location,
+                                al.user_id as changed_by_user_id, u.full_name as changed_by_username, 
+                                al.created_at, 'status_or_date_change' as activity_type
+                            FROM activity_logs al
+                            LEFT JOIN users u ON al.user_id = u.id
+                            WHERE al.action = 'truck_updated' 
+                            AND JSON_EXTRACT(al.details, '$.truck_id') = :activity_truck_id
+                            AND (
+                                JSON_CONTAINS(al.details, '\"Status\"', '$.updated_fields') OR
+                                JSON_CONTAINS(al.details, '\"WhenWillBeThere\"', '$.updated_fields')
+                            )";
+            
+            // Combine both queries with UNION and order by date
+            $combinedSql = "($locationSql) UNION ($activitySql) ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
+            
+            $stmt = $pdo->prepare($combinedSql);
+            $stmt->bindValue(':location_truck_id', $truckId, PDO::PARAM_INT);
+            $stmt->bindValue(':activity_truck_id', $truckId, PDO::PARAM_INT);
+            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Process the combined data to normalize the format
+            $processedHistory = [];
+            foreach ($history as $record) {
+                if ($record['activity_type'] === 'location_change') {
+                    $processedHistory[] = [
+                        'id' => $record['id'],
+                        'type' => 'location_change',
+                        'description' => "📍 {$record['old_location']} → {$record['new_location']}",
+                        'changed_by_username' => $record['changed_by_username'],
+                        'created_at' => $record['created_at']
+                    ];
+                } else if ($record['activity_type'] === 'status_or_date_change') {
+                    // For activity logs, we need to get the details from the original record
+                    // Since we can't easily get the details in the UNION, we'll need to fetch them separately
+                    $detailsStmt = $pdo->prepare("SELECT details FROM activity_logs WHERE id = :id");
+                    $detailsStmt->execute(['id' => $record['id']]);
+                    $detailsData = $detailsStmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($detailsData) {
+                        $details = json_decode($detailsData['details'], true);
+                        $updatedFields = $details['updated_fields'] ?? [];
+                        
+                        foreach ($updatedFields as $field) {
+                            if ($field === 'Status') {
+                                $processedHistory[] = [
+                                    'id' => $record['id'] . '_status',
+                                    'type' => 'status_change',
+                                    'description' => '🔄 Status changed',
+                                    'changed_by_username' => $record['changed_by_username'],
+                                    'created_at' => $record['created_at']
+                                ];
+                            } else if ($field === 'WhenWillBeThere') {
+                                $processedHistory[] = [
+                                    'id' => $record['id'] . '_date',
+                                    'type' => 'date_change',
+                                    'description' => '📅 Updated date changed',
+                                    'changed_by_username' => $record['changed_by_username'],
+                                    'created_at' => $record['created_at']
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Sort by creation date (newest first)
+            usort($processedHistory, function($a, $b) {
+                return strtotime($b['created_at']) - strtotime($a['created_at']);
+            });
+            
+            // Get total count for pagination (we need to count both tables)
+            $locationCountStmt = $pdo->prepare("SELECT COUNT(*) as total FROM truck_location_history WHERE truck_id = :truck_id");
+            $locationCountStmt->execute(['truck_id' => $truckId]);
+            $locationCount = $locationCountStmt->fetch(PDO::FETCH_ASSOC)['total'];
+            
+            $activityCountStmt = $pdo->prepare("SELECT COUNT(*) as total FROM activity_logs al 
+                WHERE al.action = 'truck_updated' 
+                AND JSON_EXTRACT(al.details, '$.truck_id') = :truck_id
+                AND (
+                    JSON_CONTAINS(al.details, '\"Status\"', '$.updated_fields') OR
+                    JSON_CONTAINS(al.details, '\"WhenWillBeThere\"', '$.updated_fields')
+                )");
+            $activityCountStmt->execute(['truck_id' => $truckId]);
+            $activityCount = $activityCountStmt->fetch(PDO::FETCH_ASSOC)['total'];
+            
+            // Estimate total records (this is approximate since we can't easily count the exact number)
+            $estimatedTotal = $locationCount + $activityCount;
+            
+            // Apply pagination to processed results
+            $totalRecords = count($processedHistory);
+            $totalPages = ceil($totalRecords / $limit);
+            $pagedHistory = array_slice($processedHistory, $offset, $limit);
+            
+            // Log the pagination results for debugging
+            Logger::info('Pagination results', [
+                'truck_id' => $truckId,
+                'total_records' => $totalRecords,
+                'total_pages' => $totalPages,
+                'current_page' => $page,
+                'per_page' => $limit,
+                'offset' => $offset,
+                'paged_records_count' => count($pagedHistory)
+            ]);
+            
+            self::sendResponse([
+                'success' => true,
+                'data' => $pagedHistory,
+                'pagination' => [
+                    'current_page' => $page,
+                    'total_pages' => $totalPages,
+                    'total_records' => $estimatedTotal,
+                    'per_page' => $limit
+                ],
+                'truck' => [
+                    'id' => $truckId,
+                    'truck_number' => $truckData['TruckNumber']
+                ]
+            ]);
+            
+        } catch (PDOException $e) {
+            Logger::error('Failed to get truck activity history', [
+                'error' => $e->getMessage(),
+                'truck_id' => $truckId
+            ]);
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
         }
     }

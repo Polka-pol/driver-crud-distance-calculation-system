@@ -19,6 +19,30 @@ export const formatEDTTime = (edtTime) => {
 };
 
 /**
+ * Formats EDT time for EditModal display (MM.DD HH:MM)
+ * @param {Date|string} edtTime - EDT time from server
+ * @returns {string} Formatted time string in MM.DD HH:MM format
+ */
+export const formatEDTTimeForModal = (edtTime) => {
+  if (!edtTime) return '-';
+  
+  try {
+    const date = new Date(edtTime);
+    if (isNaN(date.getTime())) return 'Invalid date';
+    
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    
+    return `${mm}.${dd} ${hh}:${min}`;
+  } catch (error) {
+    console.error('Error formatting EDT time for modal:', error);
+    return 'Invalid date';
+  }
+};
+
+/**
  * Formats EDT date for display (YYYY-MM-DD HH:MM)
  * @param {Date|string} edtTime - EDT time from server
  * @returns {string} Formatted date string

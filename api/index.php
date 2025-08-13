@@ -206,8 +206,22 @@ if ($apiRoute === '/trucks/map' && $requestMethod === 'GET') {
 // Route for getting truck location history
 if (preg_match('/^\/trucks\/(\d+)\/location-history$/', $apiRoute, $matches) && $requestMethod === 'GET') {
     $truckId = (int)$matches[1];
+    $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+    
     Auth::protect(['dispatcher', 'manager', 'admin']);
-    TruckController::getLocationHistory($truckId);
+    TruckController::getLocationHistory($truckId, $page, $limit);
+    exit();
+}
+
+// Route for getting comprehensive truck activity history (location, status, WhenWillBeThere)
+if (preg_match('/^\/trucks\/(\d+)\/activity-history$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+    $truckId = (int)$matches[1];
+    $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+    
+    Auth::protect(['dispatcher', 'manager', 'admin']);
+    TruckController::getTruckActivityHistory($truckId, $page, $limit);
     exit();
 }
 

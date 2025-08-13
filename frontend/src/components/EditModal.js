@@ -8,7 +8,7 @@ import { useModalScrollLock } from '../utils/modalScrollLock';
 import UpdateStatusModal from './UpdateStatusModal';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
-import { formatEDTTime, getCurrentEDT } from '../utils/timeUtils';
+import { formatEDTTimeForModal, getCurrentEDT } from '../utils/timeUtils';
 import './EditModal.css';
 
 const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
@@ -164,7 +164,7 @@ const EditModal = ({
               <div className="modified-by">{form.updated_by || 'Unknown User'}</div>
               <div className="modified-date">
                 {form.updated_at 
-                  ? formatEDTTime(form.updated_at)
+                  ? formatEDTTimeForModal(form.updated_at)
                   : 'Unknown Date'
                 }
               </div>
