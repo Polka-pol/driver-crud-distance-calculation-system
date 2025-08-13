@@ -3,6 +3,8 @@
 */.gitignore
 **/.gitignore
 
+db.md
+
 # Common files to ignore
 .DS_Store
 Thumbs.db
