@@ -41,7 +41,7 @@ export async function calculateDistancesForDrivers(destination, onDistancesUpdat
         const resp = await apiClient(`${API_BASE_URL}/me/permissions`);
         const data = await resp.json();
         const perms = Array.isArray(data.data) ? data.data : [];
-        const canProcess = perms.includes('distance.process') || perms.includes('distance.batch');
+        const canProcess = perms.includes('*') || perms.includes('distance.process') || perms.includes('distance.batch');
         if (!canProcess) {
             throw new Error('You do not have permission to calculate distances.');
         }

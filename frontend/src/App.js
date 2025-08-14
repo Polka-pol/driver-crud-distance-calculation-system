@@ -179,21 +179,23 @@ function App() {
     };
 
     fetchTrucks();
-    // Fetch permissions for the current user
-    (async () => {
+
+    const fetchPerms = async () => {
       try {
         const perms = await fetchMyPermissions(API_BASE_URL);
         if (Array.isArray(perms) && perms.length > 0) {
           setPermissions(perms);
         } else {
-          // Fallback: ensure admin sees all if API call returns empty
-          setPermissions((user?.role === 'admin') ? ['*'] : []);
+          const currentUser = getCurrentUser();
+          setPermissions(currentUser?.role === 'admin' ? ['*'] : []);
         }
       } catch (e) {
-        // Fallback: ensure admin sees all if API call fails (e.g., CORS)
-        setPermissions((user?.role === 'admin') ? ['*'] : []);
+        const currentUser = getCurrentUser();
+        setPermissions(currentUser?.role === 'admin' ? ['*'] : []);
       }
-    })();
+    };
+    fetchPerms();
+
     syncServerTime(); // Sync server time on page load
     
     // Sync server time every 5 minutes to keep it accurate
@@ -202,7 +204,7 @@ function App() {
     return () => {
       clearInterval(timeSyncInterval);
     };
-  }, [isAuth, user?.role]);
+  }, [isAuth]);
 
   // Prevent body scroll when comment modal is open
   useModalScrollLock(!!modalComment);
@@ -722,7 +724,7 @@ function App() {
         } else if (error.message && error.message.includes('Mapbox servers are busy')) {
             setError("⏳ Mapbox servers are busy. Processing may take longer than usual..");
         } else {
-            setError("Something went wrong during calculation. Please try again.");
+            setError(`Something went wrong during calculation. Please try again. (${error.message})`);
         }
         setIsCalculating(false);
     }
