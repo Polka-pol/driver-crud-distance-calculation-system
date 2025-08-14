@@ -12,7 +12,7 @@
     padding: 20px;
     background: white;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
 }
 
 .driver-updates-header-left {
@@ -64,7 +64,7 @@
     display: flex;
     background: white;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
     overflow: hidden;
 }
 
@@ -96,7 +96,7 @@
 .content {
     background: white;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
     min-height: 400px;
 }
 
@@ -318,7 +318,7 @@
 .location-cell {
     color: #6b7280;
     max-width: 200px;
-    word-break: break-word;
+    word-break: break-all;
 }
 
 .will-be-there-cell {
@@ -329,7 +329,7 @@
 .reason-cell {
     color: #6b7280;
     max-width: 150px;
-    word-break: break-word;
+    word-break: break-all;
 }
 
 .until-date-cell {
@@ -368,9 +368,7 @@
         font-size: 12px;
     }
     
-    .actions-cell {
-    min-width: 100px; /* Reduced width for single button */
-}
+    /* Дублікат видалено - використовується стиль з рядка 360 */
 
 /* Monthly Review */
 .monthly-review {
@@ -378,7 +376,7 @@
 }
 
 .monthly-review-header {
-    margin: 0 0 20px 0;
+    margin: 0 0 20px;
     padding: 16px 20px;
     background: #fef2f2;
     border-left: 4px solid #dc2626;
@@ -471,7 +469,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgb(0 0 0 / 50%);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -485,7 +483,7 @@
     max-width: 500px;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 25%);
 }
 
 .driver-updates-modal-header {
@@ -562,7 +560,7 @@
 }
 
 .existing-no-update-info h4 {
-    margin: 0 0 12px 0;
+    margin: 0 0 12px;
     color: #92400e;
     font-size: 14px;
     font-weight: 600;
@@ -612,7 +610,7 @@
 .form-group textarea:focus {
     outline: none;
     border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px rgb(37 99 235 / 10%);
 }
 
 .form-group textarea {
@@ -676,13 +674,13 @@
     font-weight: 600;
     transition: all 0.2s ease;
     height: 40px;
-    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 2px 4px rgb(16 185 129 / 20%);
 }
 
 .save-btn:hover {
     background: linear-gradient(135deg, #059669, #047857);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 12px rgb(16 185 129 / 30%);
 }
 
 .save-btn:disabled,
@@ -711,7 +709,7 @@
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .driver-updates-page {
         padding: 10px;
     }
@@ -791,7 +789,7 @@
     }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
     .daily-updates,
     .monthly-review {
         padding: 10px;
@@ -837,7 +835,7 @@
     align-items: center;
     margin-bottom: 12px;
     padding: 8px;
-    background: #ffffff;
+    background: #fff;
     border: 1px solid #d1d5db;
 }
 
@@ -929,19 +927,20 @@
     font-weight: 600;
     text-align: center;
     border-right: 1px solid #d1d5db;
-    min-width: 32px;
+    width: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .driver-heatmap-truck-header {
-    min-width: 60px;
+    width: 80px;
     background: #f3f4f6;
 }
 
 .driver-heatmap-driver-header {
-    min-width: 120px;
+    width: 140px;
     background: #f3f4f6;
 }
 
@@ -968,21 +967,22 @@
     font-size: 12px;
     text-align: center;
     border-right: 1px solid #e5e7eb;
-    min-width: 32px;
+    width: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .driver-heatmap-truck-number {
-    min-width: 60px;
+    width: 80px;
     background: #f9fafb;
     font-weight: 600;
     color: #374151;
 }
 
 .driver-heatmap-driver-name {
-    min-width: 120px;
+    width: 140px;
     background: #f9fafb;
     color: #6b7280;
     text-align: left;
@@ -1036,7 +1036,7 @@
 }
 
 /* Mobile responsive for driver heatmap */
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .driver-heatmap-header {
         flex-direction: column;
         gap: 6px;
@@ -1064,7 +1064,7 @@
     .driver-heatmap-truck-header,
     .driver-heatmap-driver-header,
     .driver-heatmap-day-header {
-        min-width: 28px;
+        width: 28px;
         font-size: 11px;
         padding: 4px 2px;
     }
@@ -1072,17 +1072,25 @@
     .driver-heatmap-truck-number,
     .driver-heatmap-driver-name,
     .driver-heatmap-cell {
-        min-width: 28px;
+        width: 28px;
         font-size: 11px;
         padding: 3px 2px;
     }
     
+    .driver-heatmap-truck-header {
+        width: 60px;
+    }
+    
     .driver-heatmap-truck-number {
-        min-width: 50px;
+        width: 60px;
+    }
+    
+    .driver-heatmap-driver-header {
+        width: 100px;
     }
     
     .driver-heatmap-driver-name {
-        min-width: 100px;
+        width: 100px;
     }
     
     .driver-heatmap-driver-name-text {
@@ -1099,7 +1107,7 @@
     }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
     .driver-heatmap-tab {
         padding: 8px;
     }
@@ -1120,7 +1128,7 @@
     .driver-heatmap-truck-header,
     .driver-heatmap-driver-header,
     .driver-heatmap-day-header {
-        min-width: 24px;
+        width: 24px;
         font-size: 10px;
         padding: 3px 1px;
     }
@@ -1128,21 +1136,29 @@
     .driver-heatmap-truck-number,
     .driver-heatmap-driver-name,
     .driver-heatmap-cell {
-        min-width: 24px;
+        width: 24px;
         font-size: 10px;
         padding: 2px 1px;
     }
     
+    .driver-heatmap-truck-header {
+        width: 50px;
+    }
+    
     .driver-heatmap-truck-number {
-        min-width: 45px;
+        width: 50px;
+    }
+    
+    .driver-heatmap-driver-header {
+        width: 80px;
     }
     
     .driver-heatmap-driver-name {
-        min-width: 90px;
+        width: 80px;
     }
     
     .driver-heatmap-driver-name-text {
-        max-width: 80px;
+        max-width: 70px;
     }
     
     .driver-heatmap-total-updates {

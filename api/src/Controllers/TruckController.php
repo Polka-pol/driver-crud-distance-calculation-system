@@ -47,15 +47,29 @@ class TruckController
                 // Get current user ID from JWT token
                 $currentUser = Auth::getCurrentUser();
                 $currentUserId = $currentUser ? $currentUser->id : null;
-                
+
                 // Check if phone numbers should be hidden
-                $shouldHidePhones = $row['hold_status'] === 'active' && 
+                $shouldHidePhones = $row['hold_status'] === 'active' &&
                                   $row['hold_dispatcher_id'] != $currentUserId;
-                
+
+                // Convert UTC columns to App TZ for presentation
+                $convertOut = function ($value) {
+                    if ($value === null || $value === '') {
+                        return $value;
+                    }
+                    try {
+                        $dt = \App\Core\TimeService::convertUtcToAppTz(new \DateTimeImmutable($value, new \DateTimeZone('UTC')));
+                        return $dt->format('Y-m-d H:i:s');
+                    } catch (\Throwable $e) {
+                        return $value;
+                    }
+                };
+
                 return [
                     'truck_no' => $row['TruckNumber'],
                     'loads_mark' => $row['rate'] ?? '',
                     'status' => $row['Status'],
+                    // IMPORTANT: WhenWillBeThere must be shown/used exactly as stored (no conversion)
                     'arrival_time' => $row['WhenWillBeThere'],
                     'driver_name' => $row['DriverName'],
                     'contactphone' => $shouldHidePhones ? '***' : $row['contactphone'],
@@ -66,22 +80,31 @@ class TruckController
                     'comment' => $row['comments'],
                     'id' => $row['ID'],
                     'updated_by' => $row['updated_by'],
-                    'updated_at' => $row['updated_at'],
+                    'updated_at' => $convertOut($row['updated_at']),
                     'latitude' => $row['latitude'],
                     'longitude' => $row['longitude'],
                     'hold_status' => $row['hold_status'],
-                    'hold_started_at' => $row['hold_started_at'],
+                    'hold_started_at' => (function ($value) {
+                        if ($value === null || $value === '') {
+                            return $value;
+                        }
+                        try {
+                            $dt = \App\Core\TimeService::convertUtcToAppTz(new \DateTimeImmutable($value, new \DateTimeZone('UTC')));
+                            return $dt->format('Y-m-d H:i:s');
+                        } catch (\Throwable $e) {
+                            return $value;
+                        }
+                    })($row['hold_started_at']),
                     'hold_dispatcher_id' => $row['hold_dispatcher_id'],
                     'hold_dispatcher_name' => $row['hold_dispatcher_name'],
                     'assigned_dispatcher_id' => $row['assigned_dispatcher_id'],
                     'no_need_update_reason' => $row['no_need_update_reason'],
-                    'no_need_update_until' => $row['no_need_update_until'],
+                    'no_need_update_until' => $convertOut($row['no_need_update_until']),
                     'no_need_update_comment' => $row['no_need_update_comment']
                 ];
             }, $results);
 
             self::sendResponse($mappedResults);
-
         } catch (PDOException $e) {
             Logger::error('Failed to fetch trucks', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
@@ -102,9 +125,9 @@ class TruckController
             // Get user info from JWT token
             $currentUser = 'Unknown User';
             $userData = Auth::getCurrentUser();
-            
 
-            
+
+
             if ($userData && isset($userData->fullName)) {
                 $currentUser = $userData->fullName;
             }
@@ -112,7 +135,7 @@ class TruckController
             // Build dynamic update query based on provided fields
             $updateFields = [];
             $dbData = ['ID' => $id];
-            
+
             // Map frontend field names to database column names
             $fieldMapping = [
                 'truck_no' => 'TruckNumber',
@@ -128,7 +151,7 @@ class TruckController
                 'comment' => 'comments',
                 'assigned_dispatcher_id' => 'assigned_dispatcher_id'
             ];
-            
+
             // Only include fields that are actually provided in the request
             foreach ($fieldMapping as $frontendField => $dbField) {
                 if (isset($data[$frontendField])) {
@@ -136,33 +159,31 @@ class TruckController
                     $dbData[$dbField] = $data[$frontendField];
                 }
             }
-            
+
             // Special handling for contactphone (can be set from cell_phone)
             if (isset($data['cell_phone']) && !isset($data['contactphone'])) {
                 $updateFields[] = "contactphone = :contactphone";
                 $dbData['contactphone'] = $data['cell_phone'];
             }
-            
+
             // Automatic geocoding for location updates
             if (isset($data['city_state_zip'])) {
                 // If coordinates are explicitly provided and are valid (non-zero), use them.
                 // Otherwise, always attempt to geocode the address.
-                $hasValidCoordinatesInInput = isset($data['latitude']) && isset($data['longitude']) && 
+                $hasValidCoordinatesInInput = isset($data['latitude']) && isset($data['longitude']) &&
                                               $data['latitude'] != 0 && $data['longitude'] != 0;
-                
+
                 if (!$hasValidCoordinatesInInput) {
                     // Auto-geocode the address if coordinates are missing or invalid
                     try {
                         $geocoder = new GeocoderService();
                         $coords = $geocoder->getBestCoordinatesForLocation($data['city_state_zip']);
-                        
+
                         if ($coords && isset($coords['lat']) && isset($coords['lon'])) {
                             $updateFields[] = "latitude = :latitude";
                             $updateFields[] = "longitude = :longitude";
                             $dbData['latitude'] = $coords['lat'];
                             $dbData['longitude'] = $coords['lon'];
-                            
-
                         } else {
                             // If geocoding failed, explicitly set coordinates to NULL to indicate no valid coordinates
                             $updateFields[] = "latitude = :latitude";
@@ -194,11 +215,9 @@ class TruckController
                     $updateFields[] = "longitude = :longitude";
                     $dbData['latitude'] = $data['latitude'];
                     $dbData['longitude'] = $data['longitude'];
-                    
-
                 }
             }
-            
+
             // Update the updated_by field and updated_at timestamp only if provided in the request
             if (isset($data['updated_by'])) {
                 $updateFields[] = "updated_by = :updated_by";
@@ -208,16 +227,17 @@ class TruckController
                 $updateFields[] = "updated_by = :updated_by";
                 $dbData['updated_by'] = $currentUser;
             }
-            
+
             // Always use current EDT time for updated_at
             $updateFields[] = "updated_at = :updated_at";
-            $dbData['updated_at'] = EDTTimeConverter::getCurrentEDT();
-            
+            // Store UTC at rest
+            $dbData['updated_at'] = \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s');
+
             if (empty($updateFields)) {
                 self::sendResponse(['success' => false, 'message' => 'No fields to update.'], 400);
                 return;
             }
-            
+
             // Validate that truck number is provided if it's being updated
             if (isset($data['truck_no']) && empty($data['truck_no'])) {
                 self::sendResponse(['success' => false, 'message' => 'Truck number is required.'], 400);
@@ -225,27 +245,27 @@ class TruckController
             }
 
             $pdo = Database::getConnection();
-            
+
             // Get current truck data BEFORE update for change detection
             $currentTruckStmt = $pdo->prepare("SELECT TruckNumber, CityStateZip, WhenWillBeThere, Status FROM Trucks WHERE ID = :ID");
             $currentTruckStmt->execute(['ID' => $id]);
             $currentTruckData = $currentTruckStmt->fetch(PDO::FETCH_ASSOC);
             $truckNumber = $currentTruckData['TruckNumber'] ?? 'unknown';
-            
+
             // Track changes for extended logging - always log if any tracked field is being updated
             $changes = [];
             $shouldLog = false;
-            
+
             // Always capture current state for all tracked fields
             $currentLocation = $currentTruckData['CityStateZip'] ?? null;
             $currentWhenWillBeThere = $currentTruckData['WhenWillBeThere'] ?? null;
             $currentStatus = $currentTruckData['Status'] ?? null;
-            
+
             // Check location change
             if (isset($data['city_state_zip'])) {
                 $newLocation = $data['city_state_zip'];
                 $shouldLog = true;
-                
+
                 if ($currentLocation !== $newLocation) {
                     $changes['location'] = [
                         'old' => $currentLocation,
@@ -253,12 +273,12 @@ class TruckController
                     ];
                 }
             }
-            
+
             // Check whenwillbethere change
             if (isset($data['arrival_time'])) {
                 $newWhenWillBeThere = $data['arrival_time'];
                 $shouldLog = true;
-                
+
                 if ($currentWhenWillBeThere !== $newWhenWillBeThere) {
                     $changes['whenwillbethere'] = [
                         'old' => $currentWhenWillBeThere,
@@ -266,12 +286,12 @@ class TruckController
                     ];
                 }
             }
-            
+
             // Check status change
             if (isset($data['status'])) {
                 $newStatus = $data['status'];
                 $shouldLog = true;
-                
+
                 if ($currentStatus !== $newStatus) {
                     $changes['status'] = [
                         'old' => $currentStatus,
@@ -279,9 +299,9 @@ class TruckController
                     ];
                 }
             }
-            
+
             $sql = "UPDATE Trucks SET " . implode(', ', $updateFields) . " WHERE ID = :ID";
-            
+
 
             $stmt = $pdo->prepare($sql);
             $stmt->execute($dbData);
@@ -295,32 +315,31 @@ class TruckController
                         'whenwillbethere' => isset($data['arrival_time']) ? $data['arrival_time'] : $currentWhenWillBeThere,
                         'status' => isset($data['status']) ? $data['status'] : $currentStatus
                     ];
-                    
+
                     Logger::info('Logging extended changes with all current values', [
                         'truck_id' => $id,
                         'changes' => $changes,
                         'all_current_values' => $allCurrentValues,
                         'changed_fields' => array_keys($changes)
                     ]);
-                    
+
                     self::logExtendedChange($pdo, $id, $truckNumber, $changes, $allCurrentValues, $userData);
                 }
-                
+
                 $updatedFields = array_keys($dbData);
                 // Remove internal fields from the log
-                $updatedFields = array_filter($updatedFields, function($field) {
+                $updatedFields = array_filter($updatedFields, function ($field) {
                     return !in_array($field, ['ID', 'updated_by']);
                 });
-                
+
                 ActivityLogger::log('truck_updated', [
-                    'truck_id' => $id, 
+                    'truck_id' => $id,
                     'truck_number' => $truckNumber,
                     'updated_fields' => array_values($updatedFields)
                 ]);
             }
-            
-            self::sendResponse(['success' => true, 'message' => 'Truck updated successfully.']);
 
+            self::sendResponse(['success' => true, 'message' => 'Truck updated successfully.']);
         } catch (PDOException $e) {
             Logger::error('Truck update failed', ['id' => $id, 'error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error during update.'], 500);
@@ -330,7 +349,8 @@ class TruckController
     /**
      * Update a truck's information from a POST request.
      */
-    public static function updateViaPost() {
+    public static function updateViaPost()
+    {
         $data = json_decode(file_get_contents('php://input'), true);
 
         if (!$data || !isset($data['id'])) {
@@ -345,22 +365,23 @@ class TruckController
     /**
      * Delete a truck by ID.
      */
-    public static function delete($id) {
+    public static function delete($id)
+    {
         try {
             $pdo = Database::getConnection();
-            
+
             // Get truck number before deletion for logging
             $truckNumberStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
             $truckNumberStmt->execute(['ID' => $id]);
             $truckData = $truckNumberStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$truckData) {
                 self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
                 return;
             }
-            
+
             $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
-            
+
             $sql = "DELETE FROM Trucks WHERE ID = :ID";
             $stmt = $pdo->prepare($sql);
             $stmt->execute(['ID' => $id]);
@@ -369,13 +390,12 @@ class TruckController
                  self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
                  return;
             }
-            
+
             ActivityLogger::log('truck_deleted', [
                 'truck_id' => $id,
                 'truck_number' => $truckNumber
             ]);
             self::sendResponse(['success' => true, 'message' => 'Truck deleted successfully.']);
-
         } catch (PDOException $e) {
             Logger::error('Truck deletion failed', ['id' => $id, 'error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error during deletion.'], 500);
@@ -385,7 +405,8 @@ class TruckController
     /**
      * Delete a truck by ID from a POST request.
      */
-    public static function deleteViaPost() {
+    public static function deleteViaPost()
+    {
         $data = json_decode(file_get_contents('php://input'), true);
 
         if (!$data || !isset($data['id'])) {
@@ -404,24 +425,18 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             $sql = 'SELECT 
                         t.TruckNumber, t.Status, t.DriverName, t.CellPhone, 
                         t.CityStateZip, t.ID, t.WhenWillBeThere, t.rate,
-                        COALESCE(t.latitude, ac.lat) as lat,
-                        COALESCE(t.longitude, ac.lon) as lon,
-                        COALESCE(ac.formatted_address, t.CityStateZip) as formatted_address,
+                        t.latitude as lat,
+                        t.longitude as lon,
+                        t.CityStateZip as formatted_address,
                         t.hold_status, t.hold_started_at, t.hold_dispatcher_id, t.hold_dispatcher_name,
                         t.assigned_dispatcher_id
                      FROM Trucks t
-                     LEFT JOIN address_cache ac ON t.CityStateZip = ac.search_query 
-                        OR t.CityStateZip = ac.formatted_address
-                        OR CONCAT(ac.city, ", ", ac.state, " ", ac.zip_code) = t.CityStateZip
-                        OR CONCAT(ac.city, ", ", ac.state) = LEFT(t.CityStateZip, LENGTH(CONCAT(ac.city, ", ", ac.state)))
-                     WHERE (t.latitude IS NOT NULL AND t.longitude IS NOT NULL) 
-                        OR (ac.lat IS NOT NULL AND ac.lon IS NOT NULL)
-                     GROUP BY t.ID';
-            
+                     WHERE t.latitude IS NOT NULL AND t.longitude IS NOT NULL';
+
             $stmt = $pdo->prepare($sql);
             $stmt->execute();
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -430,11 +445,11 @@ class TruckController
                 // Get current user ID from JWT token
                 $currentUser = Auth::getCurrentUser();
                 $currentUserId = $currentUser ? $currentUser->id : null;
-                
+
                 // Check if phone numbers should be hidden
-                $shouldHidePhones = $row['hold_status'] === 'active' && 
+                $shouldHidePhones = $row['hold_status'] === 'active' &&
                                   $row['hold_dispatcher_id'] != $currentUserId;
-                
+
                 return [
                     'id' => $row['ID'],
                     'truck_no' => $row['TruckNumber'],
@@ -448,7 +463,17 @@ class TruckController
                     'lon' => (float)$row['lon'],
                     'formatted_address' => $row['formatted_address'],
                     'hold_status' => $row['hold_status'],
-                    'hold_started_at' => $row['hold_started_at'],
+                    'hold_started_at' => (function ($value) {
+                        if ($value === null || $value === '') {
+                            return $value;
+                        }
+                        try {
+                            $dt = \App\Core\TimeService::convertUtcToAppTz(new \DateTimeImmutable($value, new \DateTimeZone('UTC')));
+                            return $dt->format('Y-m-d H:i:s');
+                        } catch (\Throwable $e) {
+                            return $value;
+                        }
+                    })($row['hold_started_at']),
                     'hold_dispatcher_id' => $row['hold_dispatcher_id'],
                     'hold_dispatcher_name' => $row['hold_dispatcher_name'],
                     'assigned_dispatcher_id' => $row['assigned_dispatcher_id']
@@ -456,7 +481,6 @@ class TruckController
             }, $results);
 
             self::sendResponse($mappedResults);
-
         } catch (PDOException $e) {
             Logger::error('Failed to fetch trucks for map', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
@@ -483,15 +507,15 @@ class TruckController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // Get user info from JWT token
             $currentUser = 'Unknown User';
             $userData = Auth::getCurrentUser();
-            
+
             if ($userData && isset($userData->fullName)) {
                 $currentUser = $userData->fullName;
             }
-            
+
             // Prepare base parameters
             $params = [
                 'TruckNumber' => $data['truck_no'],
@@ -500,23 +524,24 @@ class TruckController
                 'Status' => $data['status'] ?? 'Available',
                 'CityStateZip' => $data['city_state_zip'] ?? null,
                 'comments' => $data['comment'] ?? null,
-                'WhenWillBeThere' => !empty($data['arrival_time']) ? $data['arrival_time'] : EDTTimeConverter::getCurrentEDT(),
+                // NOTE: WhenWillBeThere is dispatcher-entered free text. Store exactly as provided.
+                'WhenWillBeThere' => !empty($data['arrival_time']) ? $data['arrival_time'] : null,
                 'rate' => $data['loads_mark'] ?? null,
                 'mail' => $data['email'] ?? null,
                 'contactphone' => $data['contactphone'] ?? null,
                 'Dimensions' => $data['dimensions_payload'] ?? null,
                 'assigned_dispatcher_id' => $data['assigned_dispatcher_id'] ?? null,
                 'updated_by' => $currentUser,
-                'updated_at' => EDTTimeConverter::getCurrentEDT(),
+                'updated_at' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'),
                 'latitude' => null, // Initialize with null
                 'longitude' => null // Initialize with null
             ];
-            
+
             // Automatic geocoding for location
             if (!empty($data['city_state_zip'])) {
                 // If coordinates are explicitly provided and are valid (non-zero), use them.
                 // Otherwise, always attempt to geocode the address.
-                $hasValidCoordinatesInInput = isset($data['latitude']) && isset($data['longitude']) && 
+                $hasValidCoordinatesInInput = isset($data['latitude']) && isset($data['longitude']) &&
                                               $data['latitude'] != 0 && $data['longitude'] != 0;
 
                 if (!$hasValidCoordinatesInInput) {
@@ -524,12 +549,10 @@ class TruckController
                     try {
                         $geocoder = new GeocoderService();
                         $coords = $geocoder->getBestCoordinatesForLocation($data['city_state_zip']);
-                        
+
                         if ($coords && isset($coords['lat']) && isset($coords['lon'])) {
                             $params['latitude'] = $coords['lat'];
                             $params['longitude'] = $coords['lon'];
-                            
-
                         } else {
                             // If geocoding failed, explicitly set coordinates to NULL
                             $params['latitude'] = null;
@@ -553,22 +576,20 @@ class TruckController
                     // Use provided coordinates (they are already validated as non-zero)
                     $params['latitude'] = $data['latitude'];
                     $params['longitude'] = $data['longitude'];
-                    
-
                 }
             }
-            
+
             // Build dynamic SQL based on available parameters
             $fields = array_keys($params);
             $placeholders = ':' . implode(', :', $fields);
-            
+
             $sql = "INSERT INTO Trucks (" . implode(', ', $fields) . ") VALUES (" . $placeholders . ")";
-            
+
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
-            
+
             $newTruckId = $pdo->lastInsertId();
-            
+
             ActivityLogger::log('truck_created', ['truck_id' => $newTruckId, 'truck_number' => $data['truck_no']]);
 
             // Fetch the newly created truck to return it
@@ -601,7 +622,6 @@ class TruckController
             ];
 
             self::sendResponse(['success' => true, 'message' => 'Truck created successfully.', 'truck' => $mappedTruck]);
-
         } catch (PDOException $e) {
             Logger::error('Truck creation failed', ['error' => $e->getMessage()]);
             // Check for duplicate entry
@@ -612,7 +632,7 @@ class TruckController
             }
         }
     }
-    
+
     /**
      * Log location change to truck_location_history table
      */
@@ -634,7 +654,7 @@ class TruckController
                         :changed_fields,
                         :changed_by_user_id, :changed_by_username, :created_at
                     )";
-            
+
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 ':truck_id' => $truckId,
@@ -649,9 +669,9 @@ class TruckController
                 ':changed_fields' => json_encode(array_keys($changes)),
                 ':changed_by_user_id' => $userData ? ($userData->id ?? null) : null,
                 ':changed_by_username' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User',
-                ':created_at' => EDTTimeConverter::getCurrentEDT()
+                ':created_at' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s')
             ]);
-            
+
             // Also log to activity_logs for dashboard
             ActivityLogger::log('truck_extended_change', [
                 'truck_id' => $truckId,
@@ -659,7 +679,7 @@ class TruckController
                 'changes' => $changes,
                 'changed_fields' => array_keys($changes)
             ]);
-            
+
             Logger::info('Extended change logged successfully', [
                 'truck_id' => $truckId,
                 'truck_number' => $truckNumber,
@@ -667,7 +687,6 @@ class TruckController
                 'changed_fields' => array_keys($changes),
                 'changed_by' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User'
             ]);
-            
         } catch (PDOException $e) {
             Logger::error('Failed to log location change', [
                 'error' => $e->getMessage(),
@@ -686,19 +705,19 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             // Validate truck exists
             $truckStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
             $truckStmt->execute(['ID' => $truckId]);
             $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$truckData) {
                 self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
                 return;
             }
-            
+
             $offset = ($page - 1) * $limit;
-            
+
             // Get location history with pagination
             $sql = "SELECT 
                         id, truck_id, truck_number, 
@@ -711,33 +730,43 @@ class TruckController
                     WHERE truck_id = :truck_id 
                     ORDER BY created_at DESC 
                     LIMIT :limit OFFSET :offset";
-            
+
             $stmt = $pdo->prepare($sql);
             $stmt->bindValue(':truck_id', $truckId, PDO::PARAM_INT);
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
             $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
             $stmt->execute();
-            
+
             $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // Process JSON fields and format data
-            $history = array_map(function($record) {
+            $history = array_map(function ($record) {
                 // Decode JSON changed_fields if present
                 if (!empty($record['changed_fields'])) {
                     $record['changed_fields'] = json_decode($record['changed_fields'], true);
                 }
-                
+                // Normalize created_at to App TZ ISO for consistent client parsing
+                if (!empty($record['created_at'])) {
+                    try {
+                        $record['created_at'] = \App\Core\TimeService::convertUtcToAppTz(
+                            new \DateTimeImmutable($record['created_at'], new \DateTimeZone('UTC'))
+                        )->format(DATE_ATOM);
+                    } catch (\Throwable $e) {
+                        // leave as is on failure
+                    }
+                }
+
                 return $record;
             }, $history);
-            
+
             // Get total count for pagination
             $countStmt = $pdo->prepare("SELECT COUNT(*) as total FROM truck_location_history WHERE truck_id = :truck_id");
             $countStmt->execute(['truck_id' => $truckId]);
             $countData = $countStmt->fetch(PDO::FETCH_ASSOC);
             $total = $countData['total'];
-            
+
             $totalPages = ceil($total / $limit);
-            
+
             self::sendResponse([
                 'success' => true,
                 'data' => $history,
@@ -752,7 +781,6 @@ class TruckController
                     'truck_number' => $truckData['TruckNumber']
                 ]
             ]);
-            
         } catch (PDOException $e) {
             Logger::error('Failed to get location history', [
                 'error' => $e->getMessage(),
@@ -761,7 +789,7 @@ class TruckController
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
         }
     }
-    
+
     /**
      * Get location history count for a truck
      */
@@ -769,16 +797,15 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             $countStmt = $pdo->prepare("SELECT COUNT(*) as total FROM truck_location_history WHERE truck_id = :truck_id");
             $countStmt->execute(['truck_id' => $truckId]);
             $countData = $countStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             self::sendResponse([
                 'success' => true,
                 'count' => $countData['total']
             ]);
-            
         } catch (PDOException $e) {
             Logger::error('Failed to get location history count', [
                 'error' => $e->getMessage(),
@@ -795,27 +822,27 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             // Check if truck exists
             $truckStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
             $truckStmt->execute(['ID' => $truckId]);
             $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$truckData) {
                 self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
                 return;
             }
-            
+
             $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
-            
+
             // Check if truck is already on hold
             $holdStmt = $pdo->prepare("SELECT hold_status, hold_dispatcher_id, hold_dispatcher_name FROM Trucks WHERE ID = :ID");
             $holdStmt->execute(['ID' => $truckId]);
             $holdData = $holdStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if ($holdData['hold_status'] === 'active') {
                 self::sendResponse([
-                    'success' => false, 
+                    'success' => false,
                     'message' => 'Truck is already on hold.',
                     'hold_info' => [
                         'dispatcher_name' => $holdData['hold_dispatcher_name'],
@@ -824,7 +851,7 @@ class TruckController
                 ], 409);
                 return;
             }
-            
+
             // Place hold with optimistic locking to prevent race conditions
             $updateStmt = $pdo->prepare("
                 UPDATE Trucks 
@@ -834,23 +861,23 @@ class TruckController
                     hold_dispatcher_name = :dispatcher_name
                 WHERE ID = :truck_id AND (hold_status IS NULL OR hold_status != 'active')
             ");
-            
+
             $updateStmt->execute([
-                'edt_time' => EDTTimeConverter::getCurrentEDT(),
+                'edt_time' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'),
                 'dispatcher_id' => $dispatcherId,
                 'dispatcher_name' => $dispatcherName,
                 'truck_id' => $truckId
             ]);
-            
+
             // Check if any rows were actually updated
             if ($updateStmt->rowCount() === 0) {
                 // Hold was already placed by another request
                 $holdStmt = $pdo->prepare("SELECT hold_dispatcher_name FROM Trucks WHERE ID = :ID");
                 $holdStmt->execute(['ID' => $truckId]);
                 $holdData = $holdStmt->fetch(PDO::FETCH_ASSOC);
-                
+
                 self::sendResponse([
-                    'success' => false, 
+                    'success' => false,
                     'message' => 'Truck is already on hold.',
                     'hold_info' => [
                         'dispatcher_name' => $holdData['hold_dispatcher_name'] ?? 'Unknown',
@@ -859,16 +886,15 @@ class TruckController
                 ], 409);
                 return;
             }
-            
+
             ActivityLogger::log('truck_hold_placed', [
                 'truck_id' => $truckId,
                 'truck_number' => $truckNumber,
                 'dispatcher_id' => $dispatcherId,
                 'dispatcher_name' => $dispatcherName
             ]);
-            
-            self::sendResponse(['success' => true, 'message' => 'Hold placed successfully.']);
 
+            self::sendResponse(['success' => true, 'message' => 'Hold placed successfully.']);
         } catch (PDOException $e) {
             Logger::error('Failed to place hold', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
             self::sendResponse(['success' => false, 'message' => 'Database error during hold placement.'], 500);
@@ -882,7 +908,7 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             // Check if truck exists and get hold info
             $truckStmt = $pdo->prepare("
                 SELECT TruckNumber, hold_status, hold_dispatcher_id, hold_dispatcher_name 
@@ -890,25 +916,25 @@ class TruckController
             ");
             $truckStmt->execute(['ID' => $truckId]);
             $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$truckData) {
                 self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
                 return;
             }
-            
+
             if ($truckData['hold_status'] !== 'active') {
                 self::sendResponse(['success' => false, 'message' => 'Truck is not on hold.'], 400);
                 return;
             }
-            
+
             // Check if dispatcher can remove the hold
             if ($truckData['hold_dispatcher_id'] != $dispatcherId) {
                 self::sendResponse(['success' => false, 'message' => 'You can only remove your own holds.'], 403);
                 return;
             }
-            
+
             $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
-            
+
             // Remove hold with optimistic locking to prevent race conditions
             $updateStmt = $pdo->prepare("
                 UPDATE Trucks 
@@ -918,27 +944,26 @@ class TruckController
                     hold_dispatcher_name = NULL
                 WHERE ID = :truck_id AND hold_status = 'active'
             ");
-            
+
             $updateStmt->execute([
                 'truck_id' => $truckId
             ]);
-            
+
             // Check if any rows were actually updated
             if ($updateStmt->rowCount() === 0) {
                 // Hold was already removed by another request
                 self::sendResponse(['success' => false, 'message' => 'Hold was already removed.'], 409);
                 return;
             }
-            
+
             ActivityLogger::log('truck_hold_removed', [
                 'truck_id' => $truckId,
                 'truck_number' => $truckNumber,
                 'dispatcher_id' => $dispatcherId,
                 'dispatcher_name' => $truckData['hold_dispatcher_name']
             ]);
-            
-            self::sendResponse(['success' => true, 'message' => 'Hold removed successfully.']);
 
+            self::sendResponse(['success' => true, 'message' => 'Hold removed successfully.']);
         } catch (PDOException $e) {
             Logger::error('Failed to remove hold', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
             self::sendResponse(['success' => false, 'message' => 'Database error during hold removal.'], 500);
@@ -952,7 +977,7 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             // Find and update expired holds with optimistic locking
             $updateStmt = $pdo->prepare("
                 UPDATE Trucks 
@@ -960,16 +985,15 @@ class TruckController
                 WHERE hold_status = 'active' 
                 AND hold_started_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE)
             ");
-            
+
             $updateStmt->execute();
             $expiredCount = $updateStmt->rowCount();
-            
+
             if ($expiredCount > 0) {
                 Logger::info('Cleaned up expired holds', ['count' => $expiredCount]);
             }
-            
-            self::sendResponse(['success' => true, 'expired_count' => $expiredCount]);
 
+            self::sendResponse(['success' => true, 'expired_count' => $expiredCount]);
         } catch (PDOException $e) {
             Logger::error('Failed to cleanup expired holds', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error during cleanup.'], 500);
@@ -983,41 +1007,40 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             $stmt = $pdo->prepare("
                 SELECT hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name
                 FROM Trucks WHERE ID = :ID
             ");
             $stmt->execute(['ID' => $truckId]);
             $holdData = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$holdData) {
                 self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
                 return;
             }
-            
+
             $holdInfo = [
                 'hold_status' => $holdData['hold_status'],
                 'hold_started_at' => $holdData['hold_started_at'],
                 'hold_dispatcher_id' => $holdData['hold_dispatcher_id'],
                 'hold_dispatcher_name' => $holdData['hold_dispatcher_name']
             ];
-            
+
             // Calculate time remaining if on active hold using EDT time
             if ($holdData['hold_status'] === 'active' && $holdData['hold_started_at']) {
                 $startTime = new \DateTime($holdData['hold_started_at']);
-                $now = new \DateTime(EDTTimeConverter::getCurrentEDT()); // EDT time
+                $now = new \DateTimeImmutable(\App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
                 $elapsed = $now->diff($startTime);
                 $elapsedMinutes = ($elapsed->h * 60) + $elapsed->i;
                 $remainingMinutes = max(0, 15 - $elapsedMinutes);
-                
+
                 $holdInfo['remaining_minutes'] = $remainingMinutes;
                 $holdInfo['elapsed_minutes'] = $elapsedMinutes;
                 $holdInfo['server_time'] = EDTTimeConverter::getCurrentEDT();
             }
-            
-            self::sendResponse(['success' => true, 'hold_info' => $holdInfo]);
 
+            self::sendResponse(['success' => true, 'hold_info' => $holdInfo]);
         } catch (PDOException $e) {
             Logger::error('Failed to get hold info', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
@@ -1031,10 +1054,10 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             // Get current EDT time
-            $edtTime = EDTTimeConverter::getCurrentEDT();
-            
+            $edtTime = \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s');
+
             // Get all active holds with remaining time
             $holdsStmt = $pdo->prepare("
                 SELECT ID, hold_started_at, hold_dispatcher_id, hold_dispatcher_name
@@ -1043,15 +1066,15 @@ class TruckController
             ");
             $holdsStmt->execute();
             $activeHolds = $holdsStmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             $holdsInfo = [];
             foreach ($activeHolds as $hold) {
                 $startTime = new \DateTime($hold['hold_started_at']);
-                $now = new \DateTime($edtTime); // EDT time
+                $now = new \DateTimeImmutable($edtTime, new \DateTimeZone('UTC'));
                 $elapsed = $now->diff($startTime);
                 $elapsedMinutes = ($elapsed->h * 60) + $elapsed->i;
                 $remainingMinutes = max(0, 15 - $elapsedMinutes);
-                
+
                 $holdsInfo[] = [
                     'truck_id' => $hold['ID'],
                     'remaining_minutes' => $remainingMinutes,
@@ -1059,13 +1082,12 @@ class TruckController
                     'is_expired' => $remainingMinutes <= 0
                 ];
             }
-            
+
             self::sendResponse([
-                'success' => true, 
+                'success' => true,
                 'server_time' => $edtTime,
                 'holds' => $holdsInfo
             ]);
-
         } catch (PDOException $e) {
             Logger::error('Failed to get server time and holds', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
@@ -1084,21 +1106,21 @@ class TruckController
                 'page' => $page,
                 'limit' => $limit
             ]);
-            
+
             $pdo = Database::getConnection();
-            
+
             // Validate truck exists
             $truckStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
             $truckStmt->execute(['ID' => $truckId]);
             $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$truckData) {
                 self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
                 return;
             }
-            
+
             $offset = ($page - 1) * $limit;
-            
+
             // Get location history
             $locationSql = "SELECT 
                                 id, truck_id, truck_number, old_location, new_location,
@@ -1106,7 +1128,7 @@ class TruckController
                                 'location_change' as activity_type
                             FROM truck_location_history 
                             WHERE truck_id = :location_truck_id";
-            
+
             // Get status and WhenWillBeThere changes from activity_logs
             $activitySql = "SELECT 
                                 al.id, al.id as truck_id, al.id as truck_number, 
@@ -1121,19 +1143,19 @@ class TruckController
                                 JSON_CONTAINS(al.details, '\"Status\"', '$.updated_fields') OR
                                 JSON_CONTAINS(al.details, '\"WhenWillBeThere\"', '$.updated_fields')
                             )";
-            
+
             // Combine both queries with UNION and order by date
             $combinedSql = "($locationSql) UNION ($activitySql) ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
-            
+
             $stmt = $pdo->prepare($combinedSql);
             $stmt->bindValue(':location_truck_id', $truckId, PDO::PARAM_INT);
             $stmt->bindValue(':activity_truck_id', $truckId, PDO::PARAM_INT);
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
             $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
             $stmt->execute();
-            
+
             $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // Process the combined data to normalize the format
             $processedHistory = [];
             foreach ($history as $record) {
@@ -1145,17 +1167,17 @@ class TruckController
                         'changed_by_username' => $record['changed_by_username'],
                         'created_at' => $record['created_at']
                     ];
-                } else if ($record['activity_type'] === 'status_or_date_change') {
+                } elseif ($record['activity_type'] === 'status_or_date_change') {
                     // For activity logs, we need to get the details from the original record
                     // Since we can't easily get the details in the UNION, we'll need to fetch them separately
                     $detailsStmt = $pdo->prepare("SELECT details FROM activity_logs WHERE id = :id");
                     $detailsStmt->execute(['id' => $record['id']]);
                     $detailsData = $detailsStmt->fetch(PDO::FETCH_ASSOC);
-                    
+
                     if ($detailsData) {
                         $details = json_decode($detailsData['details'], true);
                         $updatedFields = $details['updated_fields'] ?? [];
-                        
+
                         foreach ($updatedFields as $field) {
                             if ($field === 'Status') {
                                 $processedHistory[] = [
@@ -1165,7 +1187,7 @@ class TruckController
                                     'changed_by_username' => $record['changed_by_username'],
                                     'created_at' => $record['created_at']
                                 ];
-                            } else if ($field === 'WhenWillBeThere') {
+                            } elseif ($field === 'WhenWillBeThere') {
                                 $processedHistory[] = [
                                     'id' => $record['id'] . '_date',
                                     'type' => 'date_change',
@@ -1178,17 +1200,17 @@ class TruckController
                     }
                 }
             }
-            
+
             // Sort by creation date (newest first)
-            usort($processedHistory, function($a, $b) {
+            usort($processedHistory, function ($a, $b) {
                 return strtotime($b['created_at']) - strtotime($a['created_at']);
             });
-            
+
             // Get total count for pagination (we need to count both tables)
             $locationCountStmt = $pdo->prepare("SELECT COUNT(*) as total FROM truck_location_history WHERE truck_id = :truck_id");
             $locationCountStmt->execute(['truck_id' => $truckId]);
             $locationCount = $locationCountStmt->fetch(PDO::FETCH_ASSOC)['total'];
-            
+
             $activityCountStmt = $pdo->prepare("SELECT COUNT(*) as total FROM activity_logs al 
                 WHERE al.action = 'truck_updated' 
                 AND JSON_EXTRACT(al.details, '$.truck_id') = :truck_id
@@ -1198,15 +1220,15 @@ class TruckController
                 )");
             $activityCountStmt->execute(['truck_id' => $truckId]);
             $activityCount = $activityCountStmt->fetch(PDO::FETCH_ASSOC)['total'];
-            
+
             // Estimate total records (this is approximate since we can't easily count the exact number)
             $estimatedTotal = $locationCount + $activityCount;
-            
+
             // Apply pagination to processed results
             $totalRecords = count($processedHistory);
             $totalPages = ceil($totalRecords / $limit);
             $pagedHistory = array_slice($processedHistory, $offset, $limit);
-            
+
             // Log the pagination results for debugging
             Logger::info('Pagination results', [
                 'truck_id' => $truckId,
@@ -1217,7 +1239,7 @@ class TruckController
                 'offset' => $offset,
                 'paged_records_count' => count($pagedHistory)
             ]);
-            
+
             self::sendResponse([
                 'success' => true,
                 'data' => $pagedHistory,
@@ -1232,7 +1254,6 @@ class TruckController
                     'truck_number' => $truckData['TruckNumber']
                 ]
             ]);
-            
         } catch (PDOException $e) {
             Logger::error('Failed to get truck activity history', [
                 'error' => $e->getMessage(),
@@ -1241,4 +1262,4 @@ class TruckController
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
         }
     }
-} 
+}

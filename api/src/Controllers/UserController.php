@@ -43,7 +43,7 @@ class UserController
         $hashed_password = password_hash($data['password'], PASSWORD_DEFAULT);
 
         $sql = "INSERT INTO users (username, password, full_name, mobile_number, role) VALUES (:username, :password, :full_name, :mobile_number, :role)";
-        
+
         try {
             $pdo = Database::getConnection();
             $stmt = $pdo->prepare($sql);
@@ -78,19 +78,19 @@ class UserController
             self::sendResponse(['success' => false, 'message' => 'Empty request body.'], 400);
             return;
         }
-        
+
         // Fields that can be updated
         $allowed_fields = ['full_name', 'mobile_number', 'role', 'password'];
         $update_fields = [];
         $params = ['id' => $id];
 
-        foreach($allowed_fields as $field) {
-            if(isset($data[$field])) {
+        foreach ($allowed_fields as $field) {
+            if (isset($data[$field])) {
                 if ($field === 'password') {
                     // Only update password if it's not empty
                     if (!empty($data['password'])) {
-                       $update_fields[] = "password = :password";
-                       $params['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
+                        $update_fields[] = "password = :password";
+                        $params['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
                     }
                 } else {
                     $update_fields[] = "$field = :$field";
@@ -114,7 +114,7 @@ class UserController
             if ($stmt->rowCount() > 0) {
                  ActivityLogger::log('user_updated', ['user_id' => $id, 'updated_fields' => array_keys($params)]);
             }
-            
+
             self::sendResponse(['success' => true, 'message' => 'User updated successfully.']);
         } catch (PDOException $e) {
             Logger::error('User update failed', ['id' => $id, 'error' => $e->getMessage()]);
@@ -134,7 +134,7 @@ class UserController
                  self::sendResponse(['success' => false, 'message' => 'User not found.'], 404);
                  return;
             }
-            
+
             ActivityLogger::log('user_deleted', ['user_id' => $id]);
             self::sendResponse(['success' => true, 'message' => 'User deleted successfully.']);
         } catch (PDOException $e) {
@@ -162,4 +162,4 @@ class UserController
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
         }
     }
-} 
+}

@@ -1,0 +1,22 @@
+{
+  "extends": [
+    "stylelint-config-standard",
+    "stylelint-config-recommended"
+  ],
+  "rules": {
+    "selector-class-pattern": null,
+    "no-descending-specificity": "warn",
+    "declaration-block-no-duplicate-properties": "error",
+    "declaration-block-no-redundant-longhand-properties": "warn",
+    "property-no-vendor-prefix": "warn",
+    "value-no-vendor-prefix": "warn",
+    "selector-no-vendor-prefix": "warn",
+    "media-feature-name-no-vendor-prefix": "warn",
+    "at-rule-no-vendor-prefix": "warn",
+    "color-hex-length": "short",
+    "font-family-name-quotes": "always-where-required",
+    "function-url-quotes": "always",
+    "custom-property-pattern": null,
+    "keyframes-name-pattern": null
+  }
+}

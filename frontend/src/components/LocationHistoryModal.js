@@ -3,8 +3,11 @@ import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
 import { useModalScrollLock } from '../utils/modalScrollLock';
 import './LocationHistoryModal.css';
+import { formatEDTTimeForModal } from '../utils/timeUtils';
+import { usePermissions } from '../context/PermissionsContext';
 
 const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverName }) => {
+    const { has } = usePermissions();
     const [history, setHistory] = useState([]);
     const [error, setError] = useState(null);
     const [pagination, setPagination] = useState({
@@ -33,9 +36,13 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
 
     useEffect(() => {
         if (isOpen && truckId) {
-            fetchActivityHistory(1);
+            if (has('trucks.history.read')) {
+                fetchActivityHistory(1);
+            } else {
+                setError('You do not have permission to view location history.');
+            }
         }
-    }, [isOpen, truckId, fetchActivityHistory]);
+    }, [isOpen, truckId, fetchActivityHistory, has]);
 
     // Prevent body scroll when modal is open
     useModalScrollLock(isOpen);
@@ -44,77 +51,121 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
         fetchActivityHistory(page);
     };
 
-    const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const day = date.getDate().toString().padStart(2, '0');
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        return `${month}.${day} ${hours}:${minutes}`;
+    const normalizeUtcString = (s) => {
+        if (!s) return s;
+        // If it's naive 'YYYY-MM-DD HH:MM:SS', convert to ISO UTC
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
+            return s.replace(' ', 'T') + 'Z';
+        }
+        return s;
     };
 
-    const formatDateTime = (dateString) => {
-        if (!dateString) return 'Not set';
-        const date = new Date(dateString);
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const day = date.getDate().toString().padStart(2, '0');
-        const year = date.getFullYear();
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        return `${month}/${day}/${year} ${hours}:${minutes}`;
-    };
+    const formatDate = (dateString) => formatEDTTimeForModal(normalizeUtcString(dateString));
 
-    const renderChangeField = (label, oldValue, newValue, emoji, isHighlighted = false) => {
-        const hasChanged = oldValue !== newValue;
-        const displayValue = newValue || oldValue || 'Not set';
-        
-        if (hasChanged && isHighlighted) {
-            return (
-                <div className="field-change-multiline">
-                    <div className="field-label-line">
-                        {emoji} <strong>{label}:</strong>
+    // Show WhenWillBeThere values as-is (no formatting)
+
+    const TimelineItem = React.memo(({
+        id,
+        created_at,
+        changed_by_username,
+        old_location,
+        new_location,
+        old_whenwillbethere,
+        new_whenwillbethere,
+        old_status,
+        new_status,
+        showDivider
+    }) => {
+        const renderChangeField = (label, oldValue, newValue, emoji, isHighlighted = false) => {
+            const hasChanged = oldValue !== newValue;
+            const displayValue = newValue || oldValue || 'Not set';
+            
+            if (hasChanged && isHighlighted) {
+                return (
+                    <div className="field-change-multiline">
+                        <div className="field-label-line">
+                            {emoji} <strong>{label}:</strong>
+                        </div>
+                        <div className="field-change-line">
+                            <span className="old-value-inline">{oldValue || 'Not set'}</span>
+                            <span className="arrow-inline"> → </span>
+                            <span className="new-value-inline">{newValue || 'Not set'}</span>
+                        </div>
                     </div>
-                    <div className="field-change-line">
-                        <span className="old-value-inline">{oldValue || 'Not set'}</span>
-                        <span className="arrow-inline"> → </span>
-                        <span className="new-value-inline">{newValue || 'Not set'}</span>
+                );
+            } else {
+                return (
+                    <div className="field-unchanged-multiline">
+                        <div className="field-label-line">
+                            {emoji} <strong>{label}:</strong>
+                        </div>
+                        <div className="field-value-line">
+                            {displayValue}
+                        </div>
+                    </div>
+                );
+            }
+        };
+
+        const changedFields = [];
+        if (old_location !== new_location) changedFields.push('location');
+        if (old_whenwillbethere !== new_whenwillbethere) changedFields.push('whenwillbethere');
+        if (old_status !== new_status) changedFields.push('status');
+        const hasChanges = changedFields.length > 0;
+
+        return (
+            <div className="timeline-item-compact">
+                <div className="timeline-header-compact">
+                    <span className="timeline-date">📅 {formatDate(created_at)}</span>
+                    <span className="timeline-user">👤 {changed_by_username}</span>
+                    {hasChanges && (
+                        <span className="activity-badge">
+                            ⚡ {changedFields.length} change{changedFields.length > 1 ? 's' : ''}
+                        </span>
+                    )}
+                </div>
+                
+                <div className="timeline-content-compact">
+                    {/* Location */}
+                    <div className="field-row">
+                        {renderChangeField(
+                            'Location',
+                            old_location,
+                            new_location,
+                            '📍',
+                            changedFields.includes('location')
+                        )}
+                    </div>
+                    
+                    {/* When Will Be There */}
+                    <div className="field-row">
+                        {renderChangeField(
+                            'When Will Be There',
+                            old_whenwillbethere || null,
+                            new_whenwillbethere || null,
+                            '⏰',
+                            changedFields.includes('whenwillbethere')
+                        )}
+                    </div>
+                    
+                    {/* Status */}
+                    <div className="field-row">
+                        {renderChangeField(
+                            'Status',
+                            old_status,
+                            new_status,
+                            '📊',
+                            changedFields.includes('status')
+                        )}
                     </div>
                 </div>
-            );
-        } else {
-            return (
-                <div className="field-unchanged-multiline">
-                    <div className="field-label-line">
-                        {emoji} <strong>{label}:</strong>
-                    </div>
-                    <div className="field-value-line">
-                        {displayValue}
-                    </div>
-                </div>
-            );
-        }
-    };
 
-    const getChangedFields = (record) => {
-        const changes = [];
-        
-        // Check location change
-        if (record.old_location !== record.new_location) {
-            changes.push('location');
-        }
-        
-        // Check whenwillbethere change
-        if (record.old_whenwillbethere !== record.new_whenwillbethere) {
-            changes.push('whenwillbethere');
-        }
-        
-        // Check status change
-        if (record.old_status !== record.new_status) {
-            changes.push('status');
-        }
-        
-        return changes;
-    };
+                {showDivider && <div className="timeline-divider-compact"></div>}
+            </div>
+        );
+    });
+
+    // Removed unused getChangedFields; logic moved into memoized TimelineItem
 
     const handleClose = () => {
         setHistory([]);
@@ -150,61 +201,21 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                     
                     {!error && history.length > 0 && (
                         <div className="location-timeline">
-                            {history.map((record, index) => {
-                                const changedFields = getChangedFields(record);
-                                const hasChanges = changedFields.length > 0;
-                                
-                                return (
-                                    <div key={record.id} className="timeline-item-compact">
-                                        <div className="timeline-header-compact">
-                                            <span className="timeline-date">📅 {formatDate(record.created_at)}</span>
-                                            <span className="timeline-user">👤 {record.changed_by_username}</span>
-                                            {hasChanges && (
-                                                <span className="activity-badge">
-                                                    ⚡ {changedFields.length} change{changedFields.length > 1 ? 's' : ''}
-                                                </span>
-                                            )}
-                                        </div>
-                                        
-                                        <div className="timeline-content-compact">
-                                            {/* Location */}
-                                            <div className="field-row">
-                                                {renderChangeField(
-                                                    'Location',
-                                                    record.old_location,
-                                                    record.new_location,
-                                                    '📍',
-                                                    changedFields.includes('location')
-                                                )}
-                                            </div>
-                                            
-                                            {/* When Will Be There */}
-                                            <div className="field-row">
-                                                {renderChangeField(
-                                                    'When Will Be There',
-                                                    formatDateTime(record.old_whenwillbethere),
-                                                    formatDateTime(record.new_whenwillbethere),
-                                                    '⏰',
-                                                    changedFields.includes('whenwillbethere')
-                                                )}
-                                            </div>
-                                            
-                                            {/* Status */}
-                                            <div className="field-row">
-                                                {renderChangeField(
-                                                    'Status',
-                                                    record.old_status,
-                                                    record.new_status,
-                                                    '📊',
-                                                    changedFields.includes('status')
-                                                )}
-                                            </div>
-                                        </div>
-                                        
-                                        {index < history.length - 1 && <div className="timeline-divider-compact"></div>}
-                                    </div>
-                                );
-                            })}
+                            {history.map((record, index) => (
+                                <TimelineItem
+                                    key={record.id}
+                                    id={record.id}
+                                    created_at={record.created_at}
+                                    changed_by_username={record.changed_by_username}
+                                    old_location={record.old_location}
+                                    new_location={record.new_location}
+                                    old_whenwillbethere={record.old_whenwillbethere || null}
+                                    new_whenwillbethere={record.new_whenwillbethere || null}
+                                    old_status={record.old_status}
+                                    new_status={record.new_status}
+                                    showDivider={index < history.length - 1}
+                                />
+                            ))}
                         </div>
                     )}
                 </div>

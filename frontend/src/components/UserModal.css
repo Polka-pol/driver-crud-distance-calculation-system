@@ -5,7 +5,7 @@
     background-color: white;
     padding: 30px;
     border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 5px 15px rgb(0 0 0 / 30%);
     width: 100%;
     max-width: 450px;
 }
@@ -37,7 +37,7 @@
 .user-modal .modal-content form select:focus {
     outline: none;
     border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    box-shadow: 0 0 0 0.2rem rgb(0 123 255 / 25%);
 }
 
 .user-modal .modal-content form input[disabled] {

@@ -23,7 +23,7 @@ class MapboxService
             'base_uri' => 'https://api.mapbox.com',
             'timeout' => 30
         ]);
-        
+
         $this->mapboxAccessToken = $_ENV['MAPBOX_ACCESS_TOKEN'] ?? '';
     }
 
@@ -48,7 +48,7 @@ class MapboxService
                 $response = $this->httpClient->request('GET', $endpoint, [
                     'query' => ['access_token' => $this->mapboxAccessToken, 'geometries' => 'geojson']
                 ]);
-                
+
                 $data = json_decode($response->getBody()->getContents(), true);
 
                 if (empty($data['routes'][0])) {
@@ -60,7 +60,6 @@ class MapboxService
                     'distance' => (int) $route['distance'],
                     'source' => 'mapbox'
                 ];
-
             } catch (RequestException $e) {
                 if ($e->getResponse()) {
                     $statusCode = $e->getResponse()->getStatusCode();
@@ -81,12 +80,12 @@ class MapboxService
                         }
                     }
                 }
-                
+
                 Logger::error("Mapbox Directions API error after {$attempt} attempts", ['origin' => $origin, 'destination' => $destination, 'error' => $e->getMessage()]);
                 throw new Exception("Failed to get directions from Mapbox API after {$attempt} attempts.");
             }
         }
-        
+
         throw new Exception("Failed to get directions from Mapbox API after all retries.");
     }
 
@@ -124,9 +123,9 @@ class MapboxService
         $destinations = '0'; // Only destination
 
         $endpoint = "/directions-matrix/v1/mapbox/driving/{$coordsString}";
-        
 
-        
+
+
         $maxRetries = 10;
         $retryDelaySeconds = 5;
 
@@ -162,7 +161,7 @@ class MapboxService
                     }
 
                     $distance = $data['distances'][$index][0];
-                    
+
                     if ($distance !== null) {
                         // Extract driverId from the correct structure
                         $driverId = $origin['driverId'] ?? $origin['id'] ?? $index;
@@ -174,7 +173,6 @@ class MapboxService
                 }
 
                 return $results;
-
             } catch (RequestException $e) {
                 if ($e->getResponse()) {
                     $statusCode = $e->getResponse()->getStatusCode();
@@ -194,7 +192,7 @@ class MapboxService
                         }
                     }
                 }
-                
+
                 Logger::error("Mapbox Matrix API error after {$attempt} attempts", ['error' => $e->getMessage()]);
                 throw new Exception("Failed to get distances from Mapbox Matrix API after {$attempt} attempts.");
             }
@@ -202,4 +200,4 @@ class MapboxService
 
         throw new Exception("Failed to get distances from Mapbox Matrix API after all retries.");
     }
-} 
+}

@@ -26,20 +26,20 @@ class DispatcherDashboardController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             // Get all dispatchers
             $dispatchers = self::getAllDispatchers($pdo);
-            
+
             // Get today's stats for all dispatchers
             $todayStats = self::getTodayStatsAllDispatchers($pdo);
-            
+
             // Check if heatmap mode is requested
             $heatmapMode = isset($_GET['heatmap']) && $_GET['heatmap'] === 'true';
-            
+
             if ($heatmapMode) {
                 // Get heatmap data for all dispatchers
                 $heatmapData = self::getHeatmapDataAllDispatchers($pdo);
-                
+
                 self::sendResponse([
                     'dispatchers' => $dispatchers,
                     'today_stats' => $todayStats,
@@ -47,28 +47,27 @@ class DispatcherDashboardController
                 ]);
                 return;
             }
-            
+
             // Original logic for single dispatcher
             $selectedDispatcherId = $_GET['dispatcher_id'] ?? null;
             $currentUser = Auth::getCurrentUser();
-            
+
             if (!$selectedDispatcherId && $currentUser) {
                 $selectedDispatcherId = $currentUser->id;
             }
-            
+
             // Get monthly calendar data for selected dispatcher
             $monthlyData = null;
             if ($selectedDispatcherId) {
                 $monthlyData = self::getMonthlyCalendarData($pdo, $selectedDispatcherId);
             }
-            
+
             self::sendResponse([
                 'dispatchers' => $dispatchers,
                 'today_stats' => $todayStats,
                 'selected_dispatcher_id' => $selectedDispatcherId,
                 'monthly_data' => $monthlyData
             ]);
-            
         } catch (Exception $e) {
             Logger::error('Failed to get dispatcher dashboard data', ['error' => $e->getMessage()]);
             self::sendResponse(['error' => 'Failed to fetch dashboard data'], 500);
@@ -96,8 +95,11 @@ class DispatcherDashboardController
      */
     private static function getTodayStatsAllDispatchers($pdo)
     {
-        // Use standard day boundaries (midnight to midnight) using EDT
-        $todayDate = EDTTimeConverter::getCurrentEDTDate();
+        // Compute App TZ day bounds and convert to UTC for sargable range filtering
+        $todayStartApp = \App\Core\TimeService::startOfDayAppTz(\App\Core\TimeService::nowAppTz());
+        $tomorrowStartApp = $todayStartApp->modify('+1 day');
+        $startUtc = \App\Core\TimeService::convertAppTzToUtc($todayStartApp)->format('Y-m-d H:i:s');
+        $endUtc = \App\Core\TimeService::convertAppTzToUtc($tomorrowStartApp)->format('Y-m-d H:i:s');
 
         $stmt = $pdo->prepare("
             SELECT 
@@ -105,35 +107,37 @@ class DispatcherDashboardController
                 u.username,
                 u.full_name,
                 u.role,
-                COUNT(CASE WHEN a.action = 'distance_batch_calculated' 
+                SUM(CASE WHEN a.action = 'distance_batch_calculated' 
                       AND (JSON_EXTRACT(a.details, '$.query_type') = 'optimized_with_turf' 
                            OR JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats')
-                      THEN 1 END) as today_calculations,
-                COUNT(CASE WHEN a.action = 'truck_updated' THEN 1 END) as today_updates
+                      THEN 1 ELSE 0 END) as today_calculations,
+                SUM(CASE WHEN a.action = 'truck_updated' THEN 1 ELSE 0 END) as today_updates
             FROM users u
             LEFT JOIN activity_logs a ON u.id = a.user_id 
-                AND DATE(CONVERT_TZ(a.created_at, '+00:00', 'America/New_York')) = :today_date
+                AND a.created_at >= :start_utc
+                AND a.created_at < :end_utc
             WHERE u.role IN ('dispatcher', 'manager', 'admin')
             GROUP BY u.id, u.username, u.full_name, u.role
             ORDER BY today_calculations DESC, today_updates DESC, u.full_name ASC
         ");
-        
+
         $stmt->execute([
-            ':today_date' => $todayDate
+            ':start_utc' => $startUtc,
+            ':end_utc' => $endUtc
         ]);
-        
+
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Add goal status for each dispatcher
         foreach ($results as &$dispatcher) {
             $dispatcher['today_calculations'] = (int)$dispatcher['today_calculations'];
             $dispatcher['today_updates'] = (int)$dispatcher['today_updates'];
             $dispatcher['goal_status'] = self::getGoalStatus(
-                $dispatcher['today_calculations'], 
+                $dispatcher['today_calculations'],
                 $dispatcher['today_updates']
             );
         }
-        
+
         return $results;
     }
 
@@ -146,18 +150,18 @@ class DispatcherDashboardController
         $currentDate = new \DateTime(EDTTimeConverter::getCurrentEDT());
         $year = $currentDate->format('Y');
         $month = $currentDate->format('m');
-        
+
         // Get first and last day of month
         $firstDayOfMonth = new \DateTime("$year-$month-01");
         $lastDayOfMonth = clone $firstDayOfMonth;
         $lastDayOfMonth->modify('last day of this month');
-        
+
         // Get daily statistics for the month with standard day boundaries
         $dailyStats = self::getMonthlyDailyStats($pdo, $dispatcherId, $firstDayOfMonth, $lastDayOfMonth);
-        
+
         // Generate calendar grid
         $calendarData = self::generateCalendarGrid($firstDayOfMonth, $lastDayOfMonth, $dailyStats);
-        
+
         return [
             'year' => (int)$year,
             'month' => (int)$month,
@@ -171,38 +175,53 @@ class DispatcherDashboardController
      */
     private static function getMonthlyDailyStats($pdo, $dispatcherId, $startDate, $endDate)
     {
+        // Compute App TZ month bounds and convert to UTC range
+        $appTz = \App\Core\TimeService::getActiveTimezone();
+        $startApp = (new \DateTimeImmutable($startDate->format('Y-m-d'), $appTz))->setTime(0, 0, 0);
+        $endAppExclusive = (new \DateTimeImmutable($endDate->format('Y-m-d'), $appTz))->modify('+1 day')->setTime(0, 0, 0);
+        $startUtc = \App\Core\TimeService::convertAppTzToUtc($startApp)->format('Y-m-d H:i:s');
+        $endUtc = \App\Core\TimeService::convertAppTzToUtc($endAppExclusive)->format('Y-m-d H:i:s');
+
+        // Fetch all logs in one go for the user within the range
+        $stmt = $pdo->prepare("
+            SELECT 
+                a.action,
+                a.created_at
+            FROM activity_logs a
+            WHERE a.user_id = :user_id
+              AND a.created_at >= :start_utc
+              AND a.created_at < :end_utc
+        ");
+        $stmt->execute([
+            ':user_id' => $dispatcherId,
+            ':start_utc' => $startUtc,
+            ':end_utc' => $endUtc,
+        ]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Aggregate by App TZ date
         $stats = [];
-        $current = clone $startDate;
-        
-        while ($current <= $endDate) {
-            
-            $stmt = $pdo->prepare("
-                SELECT 
-                    COUNT(CASE WHEN a.action = 'distance_batch_calculated' 
-                          AND (JSON_EXTRACT(a.details, '$.query_type') = 'optimized_with_turf' 
-                               OR JSON_EXTRACT(a.details, '$.query_type') = 'cache_check_with_stats')
-                          THEN 1 END) as calculations,
-                    COUNT(CASE WHEN a.action = 'truck_updated' THEN 1 END) as updates
-                FROM activity_logs a
-                WHERE a.user_id = :user_id 
-                  AND DATE(CONVERT_TZ(a.created_at, '+00:00', 'America/New_York')) = :date
-            ");
-            
-            $stmt->execute([
-                ':user_id' => $dispatcherId,
-                ':date' => $current->format('Y-m-d')
-            ]);
-            
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            $stats[$current->format('Y-m-d')] = [
-                'calculations' => (int)$result['calculations'],
-                'updates' => (int)$result['updates']
-            ];
-            
-            $current->modify('+1 day');
+        $current = new \DateTimeImmutable($startApp->format('Y-m-d'), $appTz);
+        while ($current < $endAppExclusive) {
+            $stats[$current->format('Y-m-d')] = ['calculations' => 0, 'updates' => 0];
+            $current = $current->modify('+1 day');
         }
-        
+
+        foreach ($rows as $row) {
+            $createdUtc = new \DateTimeImmutable($row['created_at'], new \DateTimeZone('UTC'));
+            $createdApp = $createdUtc->setTimezone($appTz);
+            $dateKey = $createdApp->format('Y-m-d');
+            if (!isset($stats[$dateKey])) {
+                $stats[$dateKey] = ['calculations' => 0, 'updates' => 0];
+            }
+            if ($row['action'] === 'distance_batch_calculated') {
+                // Optionally filter by JSON details if required
+                $stats[$dateKey]['calculations'] += 1;
+            } elseif ($row['action'] === 'truck_updated') {
+                $stats[$dateKey]['updates'] += 1;
+            }
+        }
+
         return $stats;
     }
 
@@ -213,23 +232,23 @@ class DispatcherDashboardController
     {
         $calendarData = [];
         $current = clone $firstDayOfMonth;
-        
+
         // Start from Monday of the week containing the first day
         $current->modify('monday this week');
-        
+
         // Generate 6 weeks (42 days) to ensure full month coverage
         for ($week = 0; $week < 6; $week++) {
             $weekData = [];
-            
+
             for ($day = 0; $day < 7; $day++) {
                 $dateStr = $current->format('Y-m-d');
                 $isCurrentMonth = $current->format('m') == $firstDayOfMonth->format('m');
                 $isToday = $current->format('Y-m-d') === EDTTimeConverter::getCurrentEDTDate();
                 $isFuture = $current > new \DateTime(EDTTimeConverter::getCurrentEDT());
                 $isWeekend = in_array($current->format('w'), [0, 6]); // Sunday = 0, Saturday = 6
-                
+
                 $dayStats = $dailyStats[$dateStr] ?? ['calculations' => 0, 'updates' => 0];
-                
+
                 $dayData = [
                     'date' => $dateStr,
                     'day' => (int)$current->format('d'),
@@ -241,14 +260,14 @@ class DispatcherDashboardController
                     'updates' => $dayStats['updates'],
                     'goal_status' => $isWeekend ? 'weekend' : self::getGoalStatus($dayStats['calculations'], $dayStats['updates'])
                 ];
-                
+
                 $weekData[] = $dayData;
                 $current->modify('+1 day');
             }
-            
+
             $calendarData[] = $weekData;
         }
-        
+
         return $calendarData;
     }
 
@@ -275,20 +294,20 @@ class DispatcherDashboardController
         $currentDate = new \DateTime(EDTTimeConverter::getCurrentEDT());
         $year = $currentDate->format('Y');
         $month = $currentDate->format('m');
-        
+
         // Get first and last day of month
         $firstDayOfMonth = new \DateTime("$year-$month-01");
         $lastDayOfMonth = clone $firstDayOfMonth;
         $lastDayOfMonth->modify('last day of this month');
-        
+
         // Get all dispatchers
         $dispatchers = self::getAllDispatchers($pdo);
-        
+
         // Get daily statistics for all dispatchers
         $dispatcherData = [];
         foreach ($dispatchers as $dispatcher) {
             $dailyStats = self::getMonthlyDailyStats($pdo, $dispatcher['id'], $firstDayOfMonth, $lastDayOfMonth);
-            
+
             $dispatcherData[] = [
                 'id' => $dispatcher['id'],
                 'username' => $dispatcher['username'],
@@ -297,7 +316,7 @@ class DispatcherDashboardController
                 'daily_stats' => $dailyStats
             ];
         }
-        
+
         // Generate list of all days in month
         $monthDays = [];
         $current = clone $firstDayOfMonth;
@@ -305,7 +324,7 @@ class DispatcherDashboardController
             $isToday = $current->format('Y-m-d') === EDTTimeConverter::getCurrentEDTDate();
             $isFuture = $current > new \DateTime(EDTTimeConverter::getCurrentEDT());
             $isWeekend = in_array($current->format('w'), [0, 6]);
-            
+
             $monthDays[] = [
                 'date' => $current->format('Y-m-d'),
                 'day' => (int)$current->format('d'),
@@ -315,7 +334,7 @@ class DispatcherDashboardController
             ];
             $current->modify('+1 day');
         }
-        
+
         return [
             'year' => (int)$year,
             'month' => (int)$month,
@@ -324,4 +343,4 @@ class DispatcherDashboardController
             'dispatcher_data' => $dispatcherData
         ];
     }
-} 
+}

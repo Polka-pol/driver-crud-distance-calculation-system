@@ -4,9 +4,13 @@ import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
 import UpdateStatusModal from './UpdateStatusModal';
 import CopyNumbersModal from './CopyNumbersModal';
-import { getCurrentEDT, formatEDTDateTime } from '../utils/timeUtils';
+import {
+  getCurrentTimeInAppTZ,
+  formatEDTDate,
+  parseAppTzDateTimeToEpochMs,
+} from '../utils/timeUtils';
 
-const DriverUpdates = ({ onBack, user }) => {
+const DriverUpdates = ({ onBack, user, serverTimeOffset = 0 }) => {
     const [activeTab, setActiveTab] = useState('daily');
     const [view, setView] = useState('all'); // Initialize to 'all' instead of null
     const [dispatchers, setDispatchers] = useState([]);
@@ -17,7 +21,9 @@ const DriverUpdates = ({ onBack, user }) => {
     });
     const [monthlyDrivers, setMonthlyDrivers] = useState([]);
     const [heatmapData, setHeatmapData] = useState(null);
-    const [selectedMonth, setSelectedMonth] = useState(getCurrentEDT().toISOString().slice(0, 7)); // YYYY-MM format
+    const [selectedMonth, setSelectedMonth] = useState(
+    new Date().toISOString().slice(0, 7)
+  );
     const [isLoading, setIsLoading] = useState(true);
     const [isAutoUpdating, setIsAutoUpdating] = useState(false);
     const [autoUpdateResult, setAutoUpdateResult] = useState(null);
@@ -134,13 +140,14 @@ const DriverUpdates = ({ onBack, user }) => {
     useEffect(() => {
         // Only load data after view is initialized
         if (!isViewInitialized) return;
-        
+
         if (activeTab === 'heatmap') {
+            // Always reload heatmap when month/view changes
             loadHeatmapData();
         } else {
             loadDriverStatuses();
         }
-    }, [activeTab, view, loadDriverStatuses, loadHeatmapData, isViewInitialized]);
+    }, [activeTab, view, selectedMonth, loadDriverStatuses, loadHeatmapData, isViewInitialized]);
 
     const openModal = useCallback((truck) => {
         setSelectedTruck(truck);
@@ -234,20 +241,29 @@ const DriverUpdates = ({ onBack, user }) => {
         }
     }, [loadDriverStatuses]);
 
-    const formatDate = useCallback((dateString) => {
-        if (!dateString) return 'N/A';
-        
-        try {
-            const date = new Date(dateString);
-            return date.toLocaleDateString();
-        } catch {
-            return dateString;
+    const normalizeUtcString = (s) => {
+        if (!s) return s;
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
+            return s.replace(' ', 'T') + 'Z';
         }
+        return s;
+    };
+
+    const formatUntilDate = useCallback((dateString) => {
+        if (!dateString) return 'N/A';
+        const normalized = normalizeUtcString(dateString);
+        let ms = NaN;
+        const hasTz = /Z$/i.test(normalized) || /[+-]\d{2}:?\d{2}$/.test(normalized);
+        if (hasTz) {
+            ms = Date.parse(normalized);
+        } else {
+            ms = parseAppTzDateTimeToEpochMs(normalized);
+        }
+        if (!Number.isFinite(ms)) return 'Invalid date';
+        return formatEDTDate(new Date(ms));
     }, []);
 
-    const formatWhenWillBeThere = useCallback((dateString) => {
-        return formatEDTDateTime(dateString);
-    }, []);
+    // Removed unused formatWhenWillBeThere (was not referenced by UI)
 
     const getUpdateStatusColor = useCallback((hasUpdate) => {
         return hasUpdate ? '#22c55e' : '#e5e7eb'; // Green for updated, gray for not updated
@@ -262,24 +278,62 @@ const DriverUpdates = ({ onBack, user }) => {
         // Sort drivers for monthly review (oldest first)
         const sortedDrivers = category === 'monthly_review' && drivers.length > 0 && drivers[0].hasOwnProperty('WhenWillBeThere') 
             ? [...drivers].sort((a, b) => {
-                const dateA = a.WhenWillBeThere ? new Date(a.WhenWillBeThere) : new Date(0);
-                const dateB = b.WhenWillBeThere ? new Date(b.WhenWillBeThere) : new Date(0);
-                return dateA - dateB; // Oldest first
+                const strA = a.WhenWillBeThere || '';
+                const strB = b.WhenWillBeThere || '';
+                if (strA < strB) return -1;
+                if (strA > strB) return 1;
+                return 0;
             })
             : drivers;
 
         const calculateDaysSinceUpdate = (dateString) => {
             if (!dateString) return null;
-            
-            try {
-                const lastUpdate = new Date(dateString);
-                const today = getCurrentEDT();
-                const diffTime = today - lastUpdate;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return diffDays;
-            } catch {
+            const now = getCurrentTimeInAppTZ(serverTimeOffset);
+
+            const tryParse = (s) => {
+                // 1) Try robust App TZ parser
+                const ms = parseAppTzDateTimeToEpochMs(s);
+                if (Number.isFinite(ms)) return new Date(ms);
+                // 2) Try to extract common date patterns
+                const patterns = [
+                    /(\d{4})[-/.](\d{2})[-/.](\d{2})(?:[ T](\d{2}):(\d{2}))?/, // YYYY-MM-DD
+                    /(\d{2})[-/.](\d{2})[-/.](\d{4})(?:[ T](\d{2}):(\d{2}))?/, // MM-DD-YYYY or MM/DD/YYYY
+                ];
+                for (const rx of patterns) {
+                    const m = s.match(rx);
+                    if (m) {
+                        if (rx === patterns[0]) {
+                            const Y = m[1];
+                            const M = m[2];
+                            const D = m[3];
+                            const h = m[4] || '00';
+                            const mi = m[5] || '00';
+                            const iso = `${Y}-${M}-${D}T${h}:${mi}:00`;
+                            const ms2 = parseAppTzDateTimeToEpochMs(iso);
+                            if (Number.isFinite(ms2)) return new Date(ms2);
+                        } else {
+                            const M = m[1];
+                            const D = m[2];
+                            const Y = m[3];
+                            const h = m[4] || '00';
+                            const mi = m[5] || '00';
+                            const iso = `${Y}-${M}-${D}T${h}:${mi}:00`;
+                            const ms2 = parseAppTzDateTimeToEpochMs(iso);
+                            if (Number.isFinite(ms2)) return new Date(ms2);
+                        }
+                    }
+                }
                 return null;
-            }
+            };
+
+            const parsed = tryParse(String(dateString));
+            if (!parsed) return null;
+
+            const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            const dayStartNow = startOf(now);
+            const dayStartUpd = startOf(parsed);
+            const diffDays = Math.floor((dayStartNow - dayStartUpd) / (1000 * 60 * 60 * 24));
+            return diffDays >= 0 ? diffDays : 0;
         };
 
         return (
@@ -319,8 +373,8 @@ const DriverUpdates = ({ onBack, user }) => {
                                         <td className="location-cell">{driver.CityStateZip || 'N/A'}</td>
                                         <td className="will-be-there-cell">
                                             {category === 'monthly_review' 
-                                                ? formatDate(driver.WhenWillBeThere) 
-                                                : formatWhenWillBeThere(driver.WhenWillBeThere)
+                                                ? (driver.WhenWillBeThere || 'N/A')
+                                                : (driver.WhenWillBeThere || 'N/A')
                                             }
                                         </td>
                                         {category === 'monthly_review' && (
@@ -338,7 +392,7 @@ const DriverUpdates = ({ onBack, user }) => {
                                             <td className="reason-cell">{driver.no_need_update_reason || 'N/A'}</td>
                                         )}
                                         {category === 'no_need_update' && (
-                                            <td className="until-date-cell">{formatDate(driver.no_need_update_until)}</td>
+                                            <td className="until-date-cell">{formatUntilDate(driver.no_need_update_until)}</td>
                                         )}
                                         {showActions && (
                                             <td className="actions-cell">
@@ -388,7 +442,7 @@ const DriverUpdates = ({ onBack, user }) => {
                 )}
             </div>
         );
-    }, [formatDate, formatWhenWillBeThere, openModal, handleClearStatus, handleDeleteDriver, canSetNoUpdate]);
+    }, [formatUntilDate, openModal, handleClearStatus, handleDeleteDriver, canSetNoUpdate, serverTimeOffset]);
 
     const DailyUpdatesTab = useCallback(() => (
         <div className="daily-updates">

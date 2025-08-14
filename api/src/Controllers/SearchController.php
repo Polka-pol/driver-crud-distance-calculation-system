@@ -33,7 +33,6 @@ class SearchController
             // The frontend now expects a direct array of suggestions.
             // The source is already embedded within each suggestion object.
             echo json_encode($suggestions);
-
         } catch (Exception $e) {
             Logger::error("Search failed for query '{$query}'", ['error' => $e->getMessage()]);
             http_response_code(500);
@@ -79,7 +78,6 @@ class SearchController
                     'message' => 'No address found for the given coordinates'
                 ]);
             }
-
         } catch (Exception $e) {
             Logger::error("Reverse geocoding failed for lat: {$lat}, lon: {$lon}", ['error' => $e->getMessage()]);
             http_response_code(500);
@@ -131,7 +129,6 @@ class SearchController
                     'message' => 'No address found for the given coordinates'
                 ]);
             }
-
         } catch (Exception $e) {
             Logger::error("Driver reverse geocoding failed", [
                 'error' => $e->getMessage(),
@@ -154,7 +151,7 @@ class SearchController
     public static function getRecentSearches()
     {
         $query = $_GET['query'] ?? '';
-        
+
         if (empty($query) || strlen($query) < 3) {
             http_response_code(400);
             echo json_encode([
@@ -176,7 +173,7 @@ class SearchController
             }
 
             $pdo = Database::getConnection();
-            
+
             // Look for similar addresses in activity logs from today only
             $stmt = $pdo->prepare("
                 SELECT 
@@ -194,18 +191,18 @@ class SearchController
                 ORDER BY a.created_at DESC
                 LIMIT 50
             ");
-            
+
             $stmt->execute([':current_user_id' => $user->id]);
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             $matches = [];
             $queryLower = strtolower(trim($query));
-            
+
             foreach ($results as $row) {
                 $details = json_decode($row['details'], true);
                 $destination = $details['destination'] ?? '';
                 $destinationLower = strtolower(trim($destination));
-                
+
                 // Check for exact match or very similar address
                 if (self::isAddressSimilar($queryLower, $destinationLower)) {
                     $matches[] = [
@@ -229,18 +226,17 @@ class SearchController
 
             // Sort by most recent and limit to 3 matches
             $finalMatches = array_values($uniqueMatches);
-            usort($finalMatches, function($a, $b) {
+            usort($finalMatches, function ($a, $b) {
                 return strtotime($b['created_at']) - strtotime($a['created_at']);
             });
-            
+
             $finalMatches = array_slice($finalMatches, 0, 3);
-            
+
             http_response_code(200);
             echo json_encode([
                 'success' => true,
                 'matches' => $finalMatches
             ]);
-
         } catch (Exception $e) {
             Logger::error("Recent searches check failed", [
                 'error' => $e->getMessage(),
@@ -265,18 +261,18 @@ class SearchController
         }
 
         // Remove common words and punctuation for comparison
-        $normalizeAddress = function($addr) {
+        $normalizeAddress = function ($addr) {
             $addr = preg_replace('/[^\w\s]/', ' ', $addr);
             $addr = preg_replace('/\s+/', ' ', $addr);
             $addr = trim($addr);
-            
+
             // Remove common words
             $commonWords = ['street', 'st', 'avenue', 'ave', 'road', 'rd', 'drive', 'dr', 'lane', 'ln', 'boulevard', 'blvd', 'circle', 'cir', 'court', 'ct', 'place', 'pl', 'way', 'usa', 'united', 'states'];
             $words = explode(' ', $addr);
-            $words = array_filter($words, function($word) use ($commonWords) {
+            $words = array_filter($words, function ($word) use ($commonWords) {
                 return !in_array(strtolower($word), $commonWords) && strlen($word) > 1;
             });
-            
+
             return implode(' ', $words);
         };
 
@@ -284,8 +280,10 @@ class SearchController
         $normalizedDestination = $normalizeAddress($destination);
 
         // Check if query is contained in destination or vice versa
-        if (strpos($normalizedDestination, $normalizedQuery) !== false || 
-            strpos($normalizedQuery, $normalizedDestination) !== false) {
+        if (
+            strpos($normalizedDestination, $normalizedQuery) !== false ||
+            strpos($normalizedQuery, $normalizedDestination) !== false
+        ) {
             return true;
         }
 
@@ -294,7 +292,7 @@ class SearchController
             $distance = levenshtein($normalizedQuery, $normalizedDestination);
             $maxLength = max(strlen($normalizedQuery), strlen($normalizedDestination));
             $similarity = 1 - ($distance / $maxLength);
-            
+
             return $similarity > 0.8; // 80% similarity threshold
         }
 
@@ -309,9 +307,9 @@ class SearchController
         if (empty($timestamp)) {
             return 'recently';
         }
-        
+
         $diff = time() - $timestamp;
-        
+
         if ($diff < 60) {
             return 'just now';
         } elseif ($diff < 3600) {
@@ -350,7 +348,7 @@ class SearchController
             }
 
             $decoded = JWT::decode($jwt, new \Firebase\JWT\Key($secretKey, 'HS256'));
-            
+
             if (!isset($decoded->data) || $decoded->data->role !== 'driver') {
                 http_response_code(403);
                 echo json_encode(['success' => false, 'message' => 'Invalid token or insufficient permissions.']);
@@ -358,7 +356,6 @@ class SearchController
             }
 
             return (array)$decoded->data;
-
         } catch (\Exception $e) {
             Logger::warning('Driver JWT validation failed', ['error' => $e->getMessage()]);
             http_response_code(401);
@@ -366,4 +363,4 @@ class SearchController
             return null;
         }
     }
-} 
+}

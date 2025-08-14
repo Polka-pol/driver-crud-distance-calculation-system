@@ -23,21 +23,26 @@ class Logger
     {
         try {
             self::$logger = new MonologLogger('connex_app');
-            
+
             // Log errors to a rotating file to prevent it from getting too large.
             // Changed to WARNING level to reduce log spam
             $logPath = __DIR__ . '/../../logs/app.log';
             $handler = new RotatingFileHandler($logPath, 7, MonologLogger::WARNING);
             self::$logger->pushHandler($handler);
-
         } catch (Exception $e) {
             // Fallback to default error logging if Monolog fails
             error_log('Failed to initialize Monolog logger: ' . $e->getMessage());
             // Create a dummy logger to avoid breaking the application
             self::$logger = new class {
-                public function info($message, array $context = []) {}
-                public function warning($message, array $context = []) {}
-                public function error($message, array $context = []) {}
+                public function info($message, array $context = [])
+                {
+                }
+                public function warning($message, array $context = [])
+                {
+                }
+                public function error($message, array $context = [])
+                {
+                }
             };
         }
     }
@@ -57,4 +62,4 @@ class Logger
     {
         self::getLogger()->error($message, $context);
     }
-} 
+}

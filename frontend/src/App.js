@@ -16,9 +16,10 @@ import DriverUpdates from './components/DriverUpdates';
 import MapPage from './components/MapPage';
 import ServerTime from './components/ServerTime';
 import { isAuthenticated, logout, getCurrentUser } from './utils/auth';
-import { apiClient } from './utils/apiClient';
+import { apiClient, fetchMyPermissions } from './utils/apiClient';
 import { API_BASE_URL } from './config';
-import { getCurrentEDT } from './utils/timeUtils';
+import { PermissionsProvider } from './context/PermissionsContext';
+import { getCurrentEDT, setAppTimezone, parseAppTzDateTimeToEpochMs } from './utils/timeUtils';
 import { useModalScrollLock } from './utils/modalScrollLock';
 
 function App() {
@@ -73,6 +74,8 @@ function App() {
   });
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [isTimeSyncing, setIsTimeSyncing] = useState(false);
+  const [permissions, setPermissions] = useState([]);
+  const hasPermission = (key) => Array.isArray(permissions) && (permissions.includes('*') || permissions.includes(key));
 
   const handleLoginSuccess = (userData) => {
     console.log('Login success - user data:', userData);
@@ -152,6 +155,16 @@ function App() {
     const fetchTrucks = async () => {
       try {
         setIsLoading(true);
+        // Fetch app timezone first
+        try {
+          const tzResp = await apiClient(`${API_BASE_URL}/settings/timezone`);
+          if (tzResp.ok) {
+            const tzData = await tzResp.json();
+            if (tzData?.timezone) setAppTimezone(tzData.timezone);
+          }
+        } catch (e) {
+          // non-blocking
+        }
         const response = await apiClient(`${API_BASE_URL}/trucks`);
         if (!response.ok) {
           throw new Error('Failed to fetch data');
@@ -166,6 +179,21 @@ function App() {
     };
 
     fetchTrucks();
+    // Fetch permissions for the current user
+    (async () => {
+      try {
+        const perms = await fetchMyPermissions(API_BASE_URL);
+        if (Array.isArray(perms) && perms.length > 0) {
+          setPermissions(perms);
+        } else {
+          // Fallback: ensure admin sees all if API call returns empty
+          setPermissions((user?.role === 'admin') ? ['*'] : []);
+        }
+      } catch (e) {
+        // Fallback: ensure admin sees all if API call fails (e.g., CORS)
+        setPermissions((user?.role === 'admin') ? ['*'] : []);
+      }
+    })();
     syncServerTime(); // Sync server time on page load
     
     // Sync server time every 5 minutes to keep it accurate
@@ -174,7 +202,7 @@ function App() {
     return () => {
       clearInterval(timeSyncInterval);
     };
-  }, [isAuth]);
+  }, [isAuth, user?.role]);
 
   // Prevent body scroll when comment modal is open
   useModalScrollLock(!!modalComment);
@@ -281,9 +309,10 @@ function App() {
           (truck.contactphone?.toLowerCase().includes(activeSearch.phone.toLowerCase()))
         );
 
-        // Add updated filter logic using EDT time
-        const now = getCurrentEDT();
-        const truckDate = new Date(truck.arrival_time);
+        // Add updated filter logic using App TZ and server offset
+        const now = getCurrentEDT(serverTimeOffset);
+        const ms = parseAppTzDateTimeToEpochMs(String(truck.arrival_time).replace(' ', 'T') + ':00');
+        const truckDate = Number.isFinite(ms) ? new Date(ms) : new Date(NaN);
         let updatedMatch = true;
 
         if (activeSearch.updated_filter) {
@@ -314,7 +343,7 @@ function App() {
         return truckNoMatch && loadsMarkMatch && driverMatch && phoneMatch && updatedMatch && statusMatch;
       })
       .sort(sortTrucks);
-  }, [trucks, activeSearch, sortTrucks]);
+  }, [trucks, activeSearch, sortTrucks, serverTimeOffset]);
 
   const paginationData = useMemo(() => {
     const totalPages = Math.ceil(filteredTrucks.length / itemsPerPage);
@@ -429,8 +458,7 @@ function App() {
     const truckToDelete = trucks.find(t => t.id === id);
     if (!truckToDelete) return;
     
-    // eslint-disable-next-line no-restricted-globals
-    const confirmed = confirm(`Are you sure you want to delete truck #${truckToDelete.truck_no}?`);
+    const confirmed = window.confirm(`Are you sure you want to delete truck #${truckToDelete.truck_no}?`);
     if (!confirmed) return;
 
     try {
@@ -618,17 +646,17 @@ function App() {
   const syncServerTime = async () => {
     try {
       setIsTimeSyncing(true);
-      const response = await apiClient(`${API_BASE_URL}/trucks/hold/time`, {
+      const response = await apiClient(`${API_BASE_URL}/server-time`, {
         method: 'GET'
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.server_time) {
-          const serverTime = new Date(data.server_time);
-          const clientTime = getCurrentEDT();
-          const offset = serverTime.getTime() - clientTime.getTime();
-          setServerTimeOffset(offset);
+        // Compute offset in UTC to avoid locale/TZ artifacts
+        if (data && data.now_utc) {
+          const serverUtcNow = new Date(data.now_utc).getTime();
+          const clientUtcNow = Date.now();
+          setServerTimeOffset(serverUtcNow - clientUtcNow);
         }
       }
     } catch (error) {
@@ -778,6 +806,7 @@ function App() {
   return (
     <div className="app-bg">
       <div className="container">
+        <PermissionsProvider permissions={permissions}>
         <div className="app-header">
           <div className="header-left">
             <h1>Connex Transport</h1>
@@ -793,20 +822,20 @@ function App() {
               </div>
             )}
             <div className="header-actions">
-              <button onClick={() => setShowNewDriverModal(true)} className="header-btn new-driver-btn">
+              <button onClick={() => setShowNewDriverModal(true)} className="header-btn new-driver-btn" disabled={!hasPermission('trucks.create')}>
                 <span className="btn-icon">+</span>
                 <span className="btn-text">New Driver</span>
               </button>
-              <button onClick={() => setView('map')} className="header-btn map-btn">
+              <button onClick={() => setView('map')} className="header-btn map-btn" disabled={!hasPermission('trucks.map.view')}>
                 <span className="btn-text">Map</span>
               </button>
-              <button onClick={() => setView('dispatcher')} className="header-btn dispatcher-btn">
+              <button onClick={() => setView('dispatcher')} className="header-btn dispatcher-btn" disabled={!hasPermission('dashboard.dispatcher.view')}>
                 <span className="btn-text">Activity</span>
               </button>
-              <button onClick={() => setView('driver-updates')} className="header-btn driver-updates-btn">
+              <button onClick={() => setView('driver-updates')} className="header-btn driver-updates-btn" disabled={!hasPermission('driver.updates.view')}>
                 <span className="btn-text">Driver Updates</span>
               </button>
-              {(user?.role === 'manager' || user?.role === 'admin') && (
+              {hasPermission('dashboard.analytics.view') && (
                 <button onClick={() => setView('admin')} className="header-btn admin-btn">
                   <span className="btn-text">Admin</span>
                 </button>
@@ -839,7 +868,7 @@ function App() {
                 }}
                 placeholder="Enter destination for distance calculation..."
           />
-              <button className="calculate-btn" onClick={handleCalculate} disabled={!isDestinationChosen || isCalculating}>
+              <button className="calculate-btn" onClick={handleCalculate} disabled={!isDestinationChosen || isCalculating || !(hasPermission('distance.process') || hasPermission('distance.batch'))}>
                 {isCalculating ? 'Calculating...' : 'Calculate'}
               </button>
               {isCalculating && showSlowMessage && (
@@ -954,6 +983,7 @@ function App() {
             onSave={handleEditSubmit}
             onDelete={handleDelete}
             onSetNoUpdate={handleSetNoUpdate}
+            serverTimeOffset={serverTimeOffset}
           />
         )}
 
@@ -976,15 +1006,16 @@ function App() {
           />
         )}
           </>
-        ) : view === 'admin' ? (
-          <AdminPage onBack={() => setView('main')} user={user} />
+          ) : view === 'admin' ? (
+          <AdminPage onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
         ) : view === 'dispatcher' ? (
           <DispatcherDashboard onBack={() => setView('main')} user={user} />
         ) : view === 'driver-updates' ? (
-          <DriverUpdates onBack={() => setView('main')} user={user} />
-        ) : view === 'map' ? (
-          <MapPage onBack={() => setView('main')} user={user} />
+               <DriverUpdates onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
+         ) : view === 'map' ? (
+          <MapPage onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
         ) : null}
+        </PermissionsProvider>
       </div>
     </div>
   );

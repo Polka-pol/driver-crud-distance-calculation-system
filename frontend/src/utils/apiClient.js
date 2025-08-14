@@ -38,3 +38,10 @@ export async function apiClient(url, options = {}) {
 
     return response;
 } 
+
+export async function fetchMyPermissions(baseUrl) {
+    const res = await apiClient(`${baseUrl}/me/permissions`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.data) ? data.data : [];
+}

@@ -4,8 +4,10 @@ import { API_BASE_URL } from '../config';
 import './AdminPanel.css';
 import './SessionManagement.css'; // Keep specific styles for session management
 import UserModal from './UserModal';
+import { usePermissions } from '../context/PermissionsContext';
 
 const SessionManagement = () => {
+    const { has } = usePermissions();
     const [sessionData, setSessionData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -21,11 +23,15 @@ const SessionManagement = () => {
 
     useEffect(() => {
         fetchSessionData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchSessionData = async () => {
         try {
             setIsLoading(true);
+            if (!has('sessions.manage')) {
+                throw new Error('You do not have permission to view session management.');
+            }
             const response = await apiClient(`${API_BASE_URL}/dashboard/session-management`);
             if (!response.ok) {
                 throw new Error('Failed to fetch session data');
@@ -102,6 +108,10 @@ const SessionManagement = () => {
     };
 
     const handleLogoutUser = async (userId, username) => {
+        if (!has('sessions.manage')) {
+            alert('You do not have permission to logout users.');
+            return;
+        }
         if (!window.confirm(`Are you sure you want to logout user "${username}"?`)) {
             return;
         }
@@ -155,12 +165,20 @@ const SessionManagement = () => {
         try {
             let response;
             if (userId) {
+                if (!has('users.manage')) {
+                    alert('You do not have permission to update users.');
+                    return;
+                }
                 // Update user
                 response = await apiClient(`${API_BASE_URL}/users/${userId}`, {
                     method: 'PUT',
                     body: JSON.stringify(userData),
                 });
             } else {
+                if (!has('users.manage')) {
+                    alert('You do not have permission to create users.');
+                    return;
+                }
                 // Create user
                 response = await apiClient(`${API_BASE_URL}/users`, {
                     method: 'POST',
@@ -185,6 +203,10 @@ const SessionManagement = () => {
     const handleDeleteUser = async (userId, username) => {
         const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
         
+        if (!has('users.manage')) {
+            alert('You do not have permission to delete users.');
+            return;
+        }
         if (userId === currentUser.id) {
             alert('You cannot delete yourself!');
             return;

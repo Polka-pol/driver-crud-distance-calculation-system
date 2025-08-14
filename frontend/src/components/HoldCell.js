@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { getCurrentEDT } from '../utils/timeUtils';
+import React, { useState, useEffect, useRef } from 'react';
+import { parseAppTzDateTimeToEpochMs } from '../utils/timeUtils';
 
 const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpired, serverTimeOffset = 0 }) => {
   // Component for displaying hold status and countdown timer using EDT timezone
@@ -11,7 +11,14 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
   const canRemoveHold = truck.hold_dispatcher_id === currentUserId;
   const loadsMark = truck.loads_mark || '-';
 
-  // Calculate time remaining with real-time countdown using EDT time
+  const intervalRef = useRef(null);
+  const hasTriggeredExpiredRef = useRef(false);
+
+  useEffect(() => {
+    hasTriggeredExpiredRef.current = hasTriggeredExpired;
+  }, [hasTriggeredExpired]);
+
+  // Calculate time remaining with real-time countdown using App TZ robust parsing and epoch math
   useEffect(() => {
     if (!isOnHold || !truck.hold_started_at) {
       setTimeLeft(null);
@@ -19,41 +26,89 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
       return;
     }
 
-    const calculateTimeLeft = () => {
-      // Server provides hold_started_at directly in EDT
-      const startTimeEDT = new Date(truck.hold_started_at);
-      
-      // Get current time in EDT timezone
-      const currentTimeEDT = getCurrentEDT();
-      
-      // Calculate elapsed time since hold was placed in EDT
-      const elapsedMs = currentTimeEDT - startTimeEDT;
-      const totalRemainingMs = Math.max(0, (15 * 60 * 1000) - elapsedMs); // 15 minutes in milliseconds
-      
-      if (totalRemainingMs <= 0) {
+    // Parse server UTC naive timestamp ("YYYY-MM-DD HH:mm:ss") robustly as UTC
+    const safeParseUtcNaiveToEpochMs = (value) => {
+      if (!value) return NaN;
+      const str = String(value).trim();
+      if (!str) return NaN;
+      const iso = str.includes('T') ? str : str.replace(' ', 'T');
+      const withZ = /Z$/i.test(iso) || /[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+      const ms = Date.parse(withZ);
+      return Number.isNaN(ms) ? NaN : ms;
+    };
+
+    // Prefer strict UTC parse; fall back to App TZ parser if needed
+    let startEpoch = safeParseUtcNaiveToEpochMs(truck.hold_started_at);
+    if (!Number.isFinite(startEpoch)) {
+      startEpoch = parseAppTzDateTimeToEpochMs(truck.hold_started_at);
+    }
+    if (!Number.isFinite(startEpoch)) {
+      setTimeLeft('Invalid');
+      return;
+    }
+
+    // Compute initial remaining synchronously to avoid scheduling timers when already expired
+    const now0 = Date.now() + (Number.isFinite(serverTimeOffset) ? serverTimeOffset : 0);
+    const elapsed0 = Math.max(0, now0 - startEpoch);
+    const remaining0 = Math.max(0, 15 * 60 * 1000 - elapsed0);
+    if (remaining0 <= 0) {
+      setTimeLeft('EXPIRED');
+      if (onHoldExpired && !hasTriggeredExpiredRef.current) {
+        hasTriggeredExpiredRef.current = true; // prevent double-calls before state syncs
+        setHasTriggeredExpired(true);
+        onHoldExpired(truck.id);
+      }
+      return;
+    }
+
+    const update = () => {
+      // Use UTC epoch math plus server offset (robust across client timezones)
+      const nowMs = Date.now() + (Number.isFinite(serverTimeOffset) ? serverTimeOffset : 0);
+      const elapsedMs = Math.max(0, nowMs - startEpoch);
+      const remainingMs = Math.max(0, 15 * 60 * 1000 - elapsedMs);
+
+      if (remainingMs <= 0) {
         setTimeLeft('EXPIRED');
-        // Trigger a refresh to update hold status immediately (only once)
-        if (onHoldExpired && !hasTriggeredExpired) {
+        if (onHoldExpired && !hasTriggeredExpiredRef.current) {
+          hasTriggeredExpiredRef.current = true; // prevent double-calls before state syncs
           setHasTriggeredExpired(true);
           onHoldExpired(truck.id);
         }
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
         return;
       }
-      
-      const remainingMinutes = Math.floor(totalRemainingMs / (1000 * 60));
-      const remainingSeconds = Math.floor((totalRemainingMs % (1000 * 60)) / 1000);
-      
-      setTimeLeft(`${remainingMinutes}:${remainingSeconds.toString().padStart(2, '0')}`);
+
+      const totalSeconds = Math.floor(remainingMs / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      setTimeLeft(`${minutes}:${seconds.toString().padStart(2, '0')}`);
     };
 
-    // Calculate immediately
-    calculateTimeLeft();
-    
-    // Update every second
-    const interval = setInterval(calculateTimeLeft, 1000);
+    // Initial display
+    const totalSeconds0 = Math.floor(remaining0 / 1000);
+    const minutes0 = Math.floor(totalSeconds0 / 60);
+    const seconds0 = totalSeconds0 % 60;
+    setTimeLeft(`${minutes0}:${seconds0.toString().padStart(2, '0')}`);
 
-    return () => clearInterval(interval);
-  }, [truck.hold_started_at, isOnHold, onHoldExpired, truck.id, hasTriggeredExpired]);
+    // Align next tick to the next second to reduce drift, then tick every 1s
+    const now = Date.now() + (Number.isFinite(serverTimeOffset) ? serverTimeOffset : 0);
+    const msToNextSecond = 1000 - (now % 1000);
+    const startAligned = setTimeout(() => {
+      update();
+      intervalRef.current = setInterval(update, 1000);
+    }, msToNextSecond);
+
+    return () => {
+      clearTimeout(startAligned);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [truck.hold_started_at, isOnHold, onHoldExpired, truck.id, serverTimeOffset]);
 
   // Reset hasTriggeredExpired when hold status changes
   useEffect(() => {
@@ -80,6 +135,7 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
         <div 
           className={`hold-badge ${canRemoveHold ? 'clickable' : ''}`}
           onClick={canRemoveHold ? handleRemoveHold : undefined}
+          aria-label={canRemoveHold ? 'Remove hold' : 'On hold'}
           title={canRemoveHold ? 'Click to remove hold' : `Hold by: ${truck.hold_dispatcher_name}`}
         >
           ON HOLD

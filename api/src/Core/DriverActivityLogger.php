@@ -24,7 +24,7 @@ class DriverActivityLogger
     {
         // Get driver ID from parameter or JWT token
         $finalDriverId = $driverId ?? self::getDriverIdFromToken();
-        
+
         if (!$finalDriverId) {
             Logger::warning('DriverActivityLogger called without a valid driver ID or token.', ['action' => $action]);
             return;
@@ -34,18 +34,17 @@ class DriverActivityLogger
         self::ensureTableExists();
 
         $sql = "INSERT INTO driver_activity_logs (driver_id, action, details, created_at) VALUES (:driver_id, :action, :details, :created_at)";
-        
+
         try {
             $pdo = Database::getConnection();
             $stmt = $pdo->prepare($sql);
-            
+
             $stmt->execute([
                 ':driver_id' => $finalDriverId,
                 ':action' => $action,
                 ':details' => json_encode($details),
-                ':created_at' => EDTTimeConverter::getCurrentEDT()
+                ':created_at' => TimeService::nowUtc()->format('Y-m-d H:i:s')
             ]);
-
         } catch (PDOException $e) {
             // Log the failure to the main application logger.
             Logger::error('Failed to log driver activity', [
@@ -79,14 +78,14 @@ class DriverActivityLogger
             if (empty($secretKey)) {
                 throw new Exception("JWT secret key is not configured on the server.");
             }
-            
+
             $decodedToken = JWT::decode($jwt, new Key($secretKey, 'HS256'));
-            
+
             // Check if this is a driver token
             if (isset($decodedToken->data->role) && $decodedToken->data->role === 'driver') {
                 return $decodedToken->data->id ?? null;
             }
-            
+
             return null;
         } catch (Exception $e) {
             Logger::warning('JWT validation failed in DriverActivityLogger', ['error' => $e->getMessage()]);
@@ -101,11 +100,11 @@ class DriverActivityLogger
     {
         try {
             $pdo = Database::getConnection();
-            
+
             // Check if table exists
             $stmt = $pdo->prepare("SHOW TABLES LIKE 'driver_activity_logs'");
             $stmt->execute();
-            
+
             if ($stmt->rowCount() === 0) {
                 // Create the table
                 $createTableSQL = "
@@ -121,9 +120,8 @@ class DriverActivityLogger
                         FOREIGN KEY (driver_id) REFERENCES Trucks(ID) ON DELETE CASCADE
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 ";
-                
-                $pdo->exec($createTableSQL);
 
+                $pdo->exec($createTableSQL);
             }
         } catch (PDOException $e) {
             Logger::error('Failed to ensure driver_activity_logs table exists', [
@@ -144,20 +142,20 @@ class DriverActivityLogger
     {
         try {
             $pdo = Database::getConnection();
-            
+
             $sql = "SELECT dal.*, t.DriverName, t.TruckNumber 
                     FROM driver_activity_logs dal 
                     JOIN Trucks t ON dal.driver_id = t.ID 
                     WHERE dal.driver_id = :driver_id 
                     ORDER BY dal.created_at DESC 
                     LIMIT :limit OFFSET :offset";
-            
+
             $stmt = $pdo->prepare($sql);
             $stmt->bindValue(':driver_id', $driverId, PDO::PARAM_INT);
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
             $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
             $stmt->execute();
-            
+
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             Logger::error('Failed to get driver logs', [
@@ -179,7 +177,7 @@ class DriverActivityLogger
     {
         try {
             $pdo = Database::getConnection();
-            
+
             $sql = "SELECT 
                         action,
                         COUNT(*) as count,
@@ -189,12 +187,12 @@ class DriverActivityLogger
                       AND created_at >= DATE_SUB(NOW(), INTERVAL :days DAY)
                     GROUP BY action 
                     ORDER BY count DESC";
-            
+
             $stmt = $pdo->prepare($sql);
             $stmt->bindValue(':driver_id', $driverId, PDO::PARAM_INT);
             $stmt->bindValue(':days', $days, PDO::PARAM_INT);
             $stmt->execute();
-            
+
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             Logger::error('Failed to get driver activity summary', [
@@ -204,4 +202,4 @@ class DriverActivityLogger
             return [];
         }
     }
-} 
+}

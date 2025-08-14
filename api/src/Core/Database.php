@@ -41,6 +41,12 @@ class Database
 
             try {
                 self::$instance = new PDO($dsn, $user, $pass, $options);
+            // Ensure session time zone is UTC for deterministic CURRENT_TIMESTAMP, etc.
+                try {
+                    self::$instance->exec("SET time_zone = '+00:00'");
+                } catch (PDOException $e) {
+                    // Ignore if not supported
+                }
             } catch (PDOException $e) {
                 // In a real application, you would log this error.
                 // For now, we return null and let the caller handle it.
@@ -51,4 +57,4 @@ class Database
 
         return self::$instance;
     }
-} 
+}

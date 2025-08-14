@@ -5,7 +5,9 @@ namespace App\Controllers;
 use App\Core\Logger;
 use App\Models\User;
 use Firebase\JWT\JWT;
-use App\Core\ActivityLogger; // Import ActivityLogger
+use App\Core\ActivityLogger;
+
+// Import ActivityLogger
 
 class AuthController
 {
@@ -66,7 +68,6 @@ class AuthController
                     'role' => $user['role']
                 ]
             ]);
-
         } catch (\Exception $e) {
             Logger::error('JWT Generation Failed', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Could not process login. Please contact support.'], 500);
@@ -86,4 +87,4 @@ class AuthController
         ActivityLogger::log('user_login_failure', ['username' => $username, 'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown']);
         self::sendResponse(['success' => false, 'message' => 'Invalid username or password.'], 401);
     }
-} 
+}

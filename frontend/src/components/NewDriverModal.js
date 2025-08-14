@@ -1,41 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { format } from "date-fns";
-import { FaRegCalendarAlt } from "react-icons/fa";
 import './NewDriverModal.css';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
 import AddressSearchBar from './AddressSearchBar';
 import { useModalScrollLock } from '../utils/modalScrollLock';
-import { validateEDTDate } from '../utils/timeUtils';
+import { validateEDTDate, getCurrentTimeInAppTZ, formatDateTimeInAppTZ } from '../utils/timeUtils';
+import { usePermissions } from '../context/PermissionsContext';
 
 const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
   <div style={{ position: "relative", width: "100%" }}>
     <input
       className="edit-input"
-      style={{ paddingRight: "36px" }}
       onClick={onClick}
       value={value}
       readOnly
       ref={ref}
       placeholder="Select date"
     />
-    <FaRegCalendarAlt
-      style={{
-        position: "absolute",
-        right: "12px",
-        top: "50%",
-        transform: "translateY(-50%)",
-        color: "#2980b9",
-        pointerEvents: "none"
-      }}
-      size={20}
-    />
   </div>
 ));
 
 const NewDriverModal = ({ user, trucks, onClose, onDriverAdded }) => {
+  const { has } = usePermissions();
   const [newDriver, setNewDriver] = useState({
     truck_no: '',
     driver_name: '',
@@ -44,7 +32,7 @@ const NewDriverModal = ({ user, trucks, onClose, onDriverAdded }) => {
     contact_phone: '',
     email: '',
     city_state_zip: '',
-    arrival_time: new Date(),
+    arrival_time: formatDateTimeInAppTZ(getCurrentTimeInAppTZ()),
     loads_mark: '',
     dimensions_payload: '',
     comment: '',
@@ -108,6 +96,9 @@ const NewDriverModal = ({ user, trucks, onClose, onDriverAdded }) => {
       // Format phone numbers
       const formattedValue = formatPhoneNumber(value);
       setNewDriver(prev => ({ ...prev, [field]: formattedValue }));
+    } else if (field === 'arrival_time') {
+      // Format arrival_time to App TZ string immediately
+      setNewDriver(prev => ({ ...prev, [field]: value ? formatDateTimeInAppTZ(value) : null }));
     } else {
       setNewDriver(prev => ({ ...prev, [field]: value }));
     }
@@ -115,6 +106,10 @@ const NewDriverModal = ({ user, trucks, onClose, onDriverAdded }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!has('trucks.create')) {
+      setError('You do not have permission to add drivers.');
+      return;
+    }
     setIsLoading(true);
     setError(null);
 
@@ -242,7 +237,7 @@ const NewDriverModal = ({ user, trucks, onClose, onDriverAdded }) => {
       // Map contact_phone to contactphone for consistency with database
       contactphone: newDriver.contact_phone,
       // Format arrival_time consistently with EditModal
-      arrival_time: newDriver.arrival_time ? format(newDriver.arrival_time, "yyyy-MM-dd HH:mm") : null
+      arrival_time: newDriver.arrival_time ? formatDateTimeInAppTZ(newDriver.arrival_time) : null
     };
 
     try {
@@ -428,7 +423,8 @@ const NewDriverModal = ({ user, trucks, onClose, onDriverAdded }) => {
                   type="button"
                   className="now-btn"
                   onClick={() => {
-                    handleChange('arrival_time', new Date());
+                    const now = getCurrentTimeInAppTZ();
+                    handleChange('arrival_time', now);
                     handleChange('status', 'Available');
                   }}
                 >

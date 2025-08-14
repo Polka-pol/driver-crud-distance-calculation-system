@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { usePermissions } from '../context/PermissionsContext';
 import DistanceCell from './DistanceCell';
 import StatusBadge from './StatusBadge';
 import HoldCell from './HoldCell';
-import { formatEDTDate, formatEDTDateMobile } from '../utils/timeUtils';
+// No date formatting here; show raw WhenWillBeThere as stored
 import './TruckTable.css';
 
 // Conversion constant - same as in DistanceCell
@@ -28,6 +29,7 @@ const TruckTable = ({
   onHoldExpired,
   serverTimeOffset
 }) => {
+  const { has } = usePermissions();
   const [expandedCards, setExpandedCards] = useState(new Set());
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
@@ -50,22 +52,11 @@ const TruckTable = ({
     setExpandedCards(newExpandedCards);
   };
 
-  // Use centralized EDT time formatting
-  const formatDate = (dateString) => {
-    const formattedDate = formatEDTDate(dateString);
-    if (formattedDate === '-') return '-';
-    
-    const [datePart, timePart] = formattedDate.split(' ');
-    return (
-      <div className="date-display">
-        <div className="date-part">{datePart}</div>
-        <div className="time-part">{timePart}</div>
-      </div>
-    );
-  };
+  // Show raw arrival text
 
-  const formatDateMobile = (dateString) => {
-    return formatEDTDateMobile(dateString);
+  const formatArrivalRaw = (value) => {
+    if (value === null || value === undefined || value === '') return '-';
+    return String(value);
   };
 
   const commentPreview = (comment) => {
@@ -174,7 +165,7 @@ const TruckTable = ({
             <div className="mobile-card-info">
               <div className="mobile-card-name">{truck.driver_name || `Truck ${truck.truck_no}`}</div>
               <div className="mobile-card-meta">
-                <span className="mobile-card-date">{formatDateMobile(truck.arrival_time)}</span>
+                <span className="mobile-card-date">{formatArrivalRaw(truck.arrival_time)}</span>
                 <span className="mobile-card-distance">{distanceText}</span>
               </div>
             </div>
@@ -185,7 +176,7 @@ const TruckTable = ({
               truck={truck} 
               onClick={(e) => {
                 if (e && e.stopPropagation) e.stopPropagation();
-                onEdit(truck);
+                if (has('trucks.update')) onEdit(truck);
               }} 
             />
             <div className="mobile-card-expand">
@@ -203,11 +194,11 @@ const TruckTable = ({
             <div className="mobile-detail-row">
               <span className="mobile-detail-label">Mark/Hold:</span>
               <span className="mobile-detail-value">
-                                                                   <HoldCell
+                  <HoldCell
                     truck={truck}
                     currentUserId={currentUserId}
-                    onHoldClick={onHoldClick}
-                    onRemoveHold={onRemoveHold}
+                    onHoldClick={has('trucks.hold.manage') ? onHoldClick : undefined}
+                    onRemoveHold={has('trucks.hold.manage') ? onRemoveHold : undefined}
                     onHoldExpired={onHoldExpired}
                     serverTimeOffset={serverTimeOffset}
                   />
@@ -248,8 +239,8 @@ const TruckTable = ({
               </span>
             </div>
             <div className="mobile-detail-row">
-              <span className="mobile-detail-label">Updated:</span>
-              <span className="mobile-detail-value">{formatDate(truck.arrival_time)}</span>
+                <span className="mobile-detail-label">When will be there:</span>
+                <span className="mobile-detail-value">{formatArrivalRaw(truck.arrival_time)}</span>
             </div>
             {truck.comment && (
               <div className="mobile-detail-row">
@@ -393,7 +384,7 @@ const TruckTable = ({
                   onClick={onEdit} 
                 />
               </td>
-              <td className="col-when">{formatDate(truck.arrival_time)}</td>
+              <td className="col-when">{formatArrivalRaw(truck.arrival_time)}</td>
               <td className="col-driver">{truck.driver_name}</td>
               <td className="col-contact">{truck.contactphone}</td>
               <td className="col-cell">{truck.cell_phone}</td>

@@ -37,7 +37,7 @@ class DashboardController
             $usersByRole = [];
             if (!empty($userStatsRows)) {
                 $totalUsers = $userStatsRows[0]['total_users'];
-                 foreach ($userStatsRows as $row) {
+                foreach ($userStatsRows as $row) {
                     $usersByRole[$row['role']] = (int)$row['count'];
                 }
             }
@@ -53,10 +53,10 @@ class DashboardController
             // Use distance_log for cache/mapbox stats, activity_logs only for user queries
             // =========================================================
             // Calculate seven days ago in EDT timezone
-            $sevenDaysAgoDateTime = new \DateTime(EDTTimeConverter::getCurrentEDT());
+            $sevenDaysAgoDateTime = new \DateTimeImmutable(\App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
             $sevenDaysAgoDateTime->modify('-7 days');
             $sevenDaysAgo = $sevenDaysAgoDateTime->format('Y-m-d H:i:s');
-            
+
             $activityCountsStmt = $pdo->prepare("
                 SELECT 
                     COUNT(CASE WHEN action = 'distance_batch_calculated' 
@@ -69,7 +69,7 @@ class DashboardController
             ");
             $activityCountsStmt->execute([$sevenDaysAgo]);
             $activityCounts = $activityCountsStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             // Get cache/mapbox statistics from distance_log table for all time
             $distanceStatsStmt = $pdo->query("
                 SELECT 
@@ -79,7 +79,7 @@ class DashboardController
                 FROM distance_log 
             ");
             $distanceStats = $distanceStatsStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             $distanceCalcsCount = (int)$activityCounts['distance_calcs_count'];
             $truckUpdatesCount = (int)$activityCounts['truck_updates_count'];
             $totalOriginsChecked = (int)($distanceStats['total_origins_checked'] ?? 0);
@@ -99,16 +99,25 @@ class DashboardController
                 LIMIT 50
             ");
             $recentActivitiesRaw = $recentActivitiesStmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // Process activities for Live Feed with enhanced details
             $recentActivities = [];
             foreach ($recentActivitiesRaw as $activity) {
+                // Convert created_at (UTC) -> App TZ ISO for consistent client parsing
+                $createdAtIso = null;
+                try {
+                    $createdAtIso = \App\Core\TimeService::convertUtcToAppTz(
+                        new \DateTimeImmutable($activity['created_at'], new \DateTimeZone('UTC'))
+                    )->format(DATE_ATOM);
+                } catch (\Throwable $e) {
+                    $createdAtIso = $activity['created_at'];
+                }
                 $processedActivity = [
                     'action' => $activity['action'],
                     'username' => $activity['username'],
                     'full_name' => $activity['full_name'],
                     'role' => $activity['role'],
-                    'created_at' => $activity['created_at'],
+                    'created_at' => $createdAtIso,
                     'summary' => self::generateActivitySummary($activity, $pdo)
                 ];
                 $recentActivities[] = $processedActivity;
@@ -118,7 +127,7 @@ class DashboardController
             // 4. User Daily Stats for Today
             // =========================================================
             // Get today's start in EDT timezone
-            $todayStart = EDTTimeConverter::getCurrentEDTDate() . ' 00:00:00';
+            $todayStart = \App\Core\TimeService::startOfDayAppTz(\App\Core\TimeService::nowAppTz())->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
             $userDailyStatsStmt = $pdo->prepare("
                 SELECT
                     u.username,
@@ -140,6 +149,21 @@ class DashboardController
             ");
             $userDailyStatsStmt->execute([':today' => $todayStart]);
             $userDailyStats = $userDailyStatsStmt->fetchAll(PDO::FETCH_ASSOC);
+            // Normalize first/last activity timestamps to App TZ ISO
+            foreach ($userDailyStats as &$row) {
+                foreach (['first_activity_today', 'last_activity_today'] as $key) {
+                    if (!empty($row[$key])) {
+                        try {
+                            $row[$key] = \App\Core\TimeService::convertUtcToAppTz(
+                                new \DateTimeImmutable($row[$key], new \DateTimeZone('UTC'))
+                            )->format(DATE_ATOM);
+                        } catch (\Throwable $e) {
+                            // leave as is
+                        }
+                    }
+                }
+            }
+            unset($row);
 
             // =========================================================
             // 5. Most Active Users (Last 7 Days)
@@ -160,7 +184,7 @@ class DashboardController
             ");
             $topUsersStmt->execute([$sevenDaysAgo]);
             $topUsers = $topUsersStmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // =========================================================
             // 6. Database Analytics (for DatabaseAnalytics component)
             // Use data already fetched in activityCounts for better performance
@@ -216,7 +240,7 @@ class DashboardController
                 $user['mapbox_requests_used'] = (int)$user['mapbox_requests_used'];
                 $user['total_origins_checked'] = (int)$user['total_origins_checked'];
             }
-            unset($user); 
+            unset($user);
 
             // Assemble the data
             $analytics = [
@@ -246,9 +270,8 @@ class DashboardController
                     ]
                 ]
             ];
-            
-            self::sendResponse($analytics);
 
+            self::sendResponse($analytics);
         } catch (\Exception $e) {
             Logger::error('Failed to get dashboard analytics', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Could not retrieve analytics data.'], 500);
@@ -259,12 +282,12 @@ class DashboardController
     {
         try {
             $pdo = Database::getConnection();
-            
+
             // Get active users based on recent activity (last 4 hours = active session) in EDT
-            $activeThresholdDateTime = new \DateTime(EDTTimeConverter::getCurrentEDT());
+            $activeThresholdDateTime = new \DateTimeImmutable(\App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
             $activeThresholdDateTime->modify('-4 hours');
             $activeThreshold = $activeThresholdDateTime->format('Y-m-d H:i:s');
-            
+
             $activeSessions = $pdo->prepare("
                 SELECT 
                     u.id,
@@ -285,14 +308,14 @@ class DashboardController
             ");
             $activeSessions->execute([$activeThreshold]);
             $sessions = $activeSessions->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // Calculate session statistics
             $totalSessions = count($sessions);
             $activeSessions = 0;
             $idleSessions = 0;
             $offlineSessions = 0;
             $sessionDurations = [];
-            
+
             foreach ($sessions as &$session) {
                 switch ($session['status']) {
                     case 'active':
@@ -305,13 +328,13 @@ class DashboardController
                         $offlineSessions++;
                         break;
                 }
-                
+
                 // Calculate session duration (time since last activity)
                 if ($session['last_activity']) {
                     $lastActivity = new \DateTime($session['last_activity']);
-                    $now = new \DateTime(EDTTimeConverter::getCurrentEDT());
+                    $now = new \DateTimeImmutable(\App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
                     $duration = $now->diff($lastActivity);
-                    
+
                     if ($duration->days > 0) {
                         $session['session_duration'] = $duration->days . 'd ' . $duration->h . 'h';
                         $session['duration_minutes'] = ($duration->days * 1440) + ($duration->h * 60) + $duration->i;
@@ -323,17 +346,17 @@ class DashboardController
                     $session['session_duration'] = 'Never logged in';
                     $session['duration_minutes'] = 0;
                 }
-                
-                // Format last activity using EDT
+
+                // Format last activity using active App Timezone
                 if ($session['last_activity']) {
                     $lastActivityDateTime = new \DateTime($session['last_activity']);
-                    $lastActivityDateTime->setTimezone(new \DateTimeZone('America/New_York'));
+                    $lastActivityDateTime->setTimezone(\App\Core\TimeService::getActiveTimezone());
                     $session['last_activity_formatted'] = $lastActivityDateTime->format('M j, H:i');
                 } else {
                     $session['last_activity_formatted'] = 'Never';
                 }
             }
-            
+
             // Get today's login/activity stats
             $todayStats = $pdo->query("
                 SELECT 
@@ -347,7 +370,7 @@ class DashboardController
                     GROUP BY user_id
                 ) as user_activity_count
             ")->fetch(PDO::FETCH_ASSOC);
-            
+
             $sessionStats = [
                 'total_users' => $totalSessions,
                 'active_sessions' => $activeSessions,
@@ -357,12 +380,11 @@ class DashboardController
                 'total_activities_today' => (int)($todayStats['total_activities_today'] ?? 0),
                 'avg_activities_per_user' => round($todayStats['avg_activities_per_user'] ?? 0, 1)
             ];
-            
+
             self::sendResponse([
                 'sessions' => $sessions,
                 'stats' => $sessionStats
             ]);
-            
         } catch (\Exception $e) {
             Logger::error('Failed to get session management data', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Could not retrieve session data.'], 500);
@@ -388,12 +410,12 @@ class DashboardController
             }
 
             $pdo = Database::getConnection();
-            
+
             // Get user info for logging
             $userStmt = $pdo->prepare("SELECT username, full_name FROM users WHERE id = ?");
             $userStmt->execute([$userId]);
             $user = $userStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$user) {
                 self::sendResponse(['success' => false, 'message' => 'User not found.'], 404);
                 return;
@@ -414,7 +436,7 @@ class DashboardController
                 'logged_out_by' => $admin['username'] ?? 'Unknown Admin',
                 'target_user' => $user['username'],
                 'target_user_full_name' => $user['full_name'],
-                'logout_time' => EDTTimeConverter::getCurrentEDT()
+                'logout_time' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s')
             ]);
             $logStmt->execute([$userId, $details]);
 
@@ -427,21 +449,76 @@ class DashboardController
                 'target_user_id' => $userId,
                 'target_user' => $user['username'],
                 'target_user_full_name' => $user['full_name'],
-                'action_time' => EDTTimeConverter::getCurrentEDT()
+                'action_time' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s')
             ]);
             $adminLogStmt->execute([$adminUserId, $adminDetails]);
 
 
 
             self::sendResponse([
-                'success' => true, 
+                'success' => true,
                 'message' => "User '{$user['username']}' has been logged out successfully.",
                 'logged_out_user' => $user['username']
             ]);
-
         } catch (\Exception $e) {
             Logger::error('Failed to logout user', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Could not logout user.'], 500);
+        }
+    }
+
+    /**
+     * Return recent RBAC-related audit logs
+     */
+    public static function getRbacLogs()
+    {
+        try {
+            $pdo = Database::getConnection();
+            $stmt = $pdo->query("
+                SELECT a.action, a.details, a.created_at, a.user_id, u.username, u.full_name
+                FROM activity_logs a
+                LEFT JOIN users u ON a.user_id = u.id
+                WHERE a.action IN (
+                    'rbac_role_created',
+                    'rbac_role_updated',
+                    'rbac_role_deleted',
+                    'rbac_role_permissions_set'
+                )
+                ORDER BY a.created_at DESC
+                LIMIT 200
+            ");
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $logs = [];
+            foreach ($rows as $row) {
+                $createdAtIso = null;
+                try {
+                    $createdAtIso = \App\Core\TimeService::convertUtcToAppTz(
+                        new \DateTimeImmutable($row['created_at'], new \DateTimeZone('UTC'))
+                    )->format(DATE_ATOM);
+                } catch (\Throwable $e) {
+                    $createdAtIso = $row['created_at'];
+                }
+                $details = [];
+                if (!empty($row['details'])) {
+                    try {
+                        $details = json_decode($row['details'], true) ?: [];
+                    } catch (\Throwable $e) {
+                        $details = [];
+                    }
+                }
+                $logs[] = [
+                    'action' => $row['action'],
+                    'actor_username' => $row['username'],
+                    'actor_full_name' => $row['full_name'],
+                    'created_at' => $createdAtIso,
+                    'details' => $details,
+                ];
+            }
+
+            self::sendResponse(['success' => true, 'data' => $logs]);
+        } catch (\Exception $e) {
+            Logger::error('Failed to fetch RBAC logs', ['error' => $e->getMessage()]);
+            self::sendResponse(['success' => false, 'message' => 'Could not retrieve RBAC logs.'], 500);
         }
     }
 
@@ -459,7 +536,7 @@ class DashboardController
     {
         $action = $activity['action'];
         $details = $activity['details'] ? json_decode($activity['details'], true) : [];
-        
+
         switch ($action) {
             case 'distance_batch_calculated':
                 $destination = $details['destination'] ?? 'Unknown destination';
@@ -467,7 +544,7 @@ class DashboardController
                 $cacheHits = $details['cache_hits'] ?? 0;
                 $mapboxRequests = $details['mapbox_requests'] ?? 0;
                 $queryType = $details['query_type'] ?? 'unknown';
-                
+
                 // Show different info based on query type
                 if ($queryType === 'optimized_with_turf') {
                     $preliminaryCalculations = $details['preliminary_calculations'] ?? 0;
@@ -480,21 +557,21 @@ class DashboardController
                     $successRate = $details['success_rate'] ?? 0;
                     $cacheInfo = " ({$cacheHits} cached, {$mapboxRequests} from Mapbox, {$successRate}% success)";
                 }
-                
+
                 return "📍 " . self::truncateAddress($destination) . $cacheInfo;
-                
+
             case 'distance_calculation_cached':
                 $from = $details['origin_address'] ?? 'Unknown origin';
                 $to = $details['destination_address'] ?? 'Unknown destination';
                 $distance = isset($details['distance_meters']) ? round($details['distance_meters'] / 1609.34) . ' mi' : 'N/A';
                 return "Cache hit: " . self::truncateAddress($from) . " → " . self::truncateAddress($to) . " ({$distance})";
-                
+
             case 'distance_calculation_mapbox':
                 $from = $details['origin_address'] ?? 'Unknown origin';
                 $to = $details['destination_address'] ?? 'Unknown destination';
                 $distance = isset($details['distance_meters']) ? round($details['distance_meters'] / 1609.34) . ' mi' : 'N/A';
                 return "Mapbox API: " . self::truncateAddress($from) . " → " . self::truncateAddress($to) . " ({$distance})";
-                
+
             case 'truck_updated':
                 $truckId = $details['truck_id'] ?? 'Unknown';
                 $truckNumber = $details['truck_number'] ?? 'unknown';
@@ -502,19 +579,19 @@ class DashboardController
                 $fieldsText = is_array($fields) ? implode(', ', $fields) : 'multiple fields';
                 $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
                 return "Updated truck {$truckDisplay}: {$fieldsText}";
-                
+
             case 'truck_created':
                 $truckId = $details['truck_id'] ?? 'Unknown';
                 $truckNumber = $details['truck_number'] ?? 'unknown';
                 $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
                 return "Created new truck {$truckDisplay}";
-                
+
             case 'truck_deleted':
                 $truckId = $details['truck_id'] ?? 'Unknown';
                 $truckNumber = $details['truck_number'] ?? 'unknown';
                 $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
                 return "Deleted truck {$truckDisplay}";
-                
+
             case 'truck_location_changed':
                 $truckId = $details['truck_id'] ?? 'Unknown';
                 $truckNumber = $details['truck_number'] ?? 'unknown';
@@ -522,31 +599,31 @@ class DashboardController
                 $newLocation = $details['new_location'] ?? 'Unknown location';
                 $truckDisplay = $truckNumber !== 'unknown' ? $truckNumber : "#{$truckId}";
                 return "🚚 Truck {$truckDisplay} location changed: {$oldLocation} → {$newLocation}";
-                
+
             case 'user_created':
                 $username = $details['username'] ?? 'Unknown';
                 return "Created new user: {$username}";
-                
+
             case 'user_updated':
                 $userId = $details['user_id'] ?? 'Unknown';
                 $fields = $details['updated_fields'] ?? [];
                 $fieldsText = is_array($fields) ? implode(', ', $fields) : 'profile';
                 return "Updated user #{$userId}: {$fieldsText}";
-                
+
             case 'user_login_success':
                 return 'Successfully logged in';
-                
+
             case 'statistics_reset':
                 return 'Reset system statistics';
-                
+
             case 'test_analytics_created':
                 return 'Created test analytics data';
-                
+
             default:
                 return ucfirst(str_replace('_', ' ', $action));
         }
     }
-    
+
     /**
      * Truncate address for display in activity feed
      */
@@ -557,4 +634,4 @@ class DashboardController
         }
         return substr($address, 0, $maxLength - 3) . '...';
     }
-} 
+}

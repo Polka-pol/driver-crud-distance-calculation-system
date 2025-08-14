@@ -12,6 +12,7 @@
   gap: 1px;
   align-items: center;
   font-size: 0.7rem;
+
   /* Optimize layout performance */
   contain: layout style;
   will-change: transform;
@@ -21,8 +22,9 @@
   font-weight: 500;
   color: #2c5282;
   font-size: 0.75rem;
+
   /* Optimize text rendering */
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizelegibility;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -51,8 +53,10 @@
   font-weight: 500;
   color: white;
   margin-top: 1px;
+
   /* Add hardware acceleration */
   transform: translateZ(0);
+
   /* Optimize transitions */
   transition: opacity 0.2s ease;
 }

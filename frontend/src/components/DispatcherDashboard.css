@@ -3,7 +3,7 @@
     max-width: none;
     margin: 0;
     padding: 24px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
     background: none;
     min-height: 100vh;
     border-radius: 0;
@@ -40,7 +40,7 @@
     font-size: 20px;
     font-weight: 600;
     color: #374151;
-    margin: 0 0 20px 0;
+    margin: 0 0 20px;
 }
 
 .dispatcher-dashboard-performance-grid {
@@ -50,11 +50,11 @@
 }
 
 .dispatcher-dashboard-performance-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
     border: 1px solid #e2e8f0;
     border-radius: 16px;
     padding: 24px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 10%), 0 2px 4px -1px rgb(0 0 0 / 6%);
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
@@ -83,7 +83,7 @@
     border-radius: 20px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
 }
 
 .dispatcher-dashboard-card-stats {
@@ -97,8 +97,8 @@
     flex: 1;
     padding: 16px;
     border-radius: 12px;
-    background: rgba(255,255,255,0.7);
-    border: 1px solid rgba(255,255,255,0.8);
+    background: rgb(255 255 255 / 70%);
+    border: 1px solid rgb(255 255 255 / 80%);
     backdrop-filter: blur(10px);
 }
 
@@ -164,7 +164,7 @@
     font-size: 13px;
     font-weight: 700;
     color: #64748b;
-    padding: 10px 0 6px 0;
+    padding: 10px 0 6px;
     background: #f8fafc;
     letter-spacing: 0.5px;
     border-bottom: 1px solid #e5e7eb;
@@ -204,7 +204,7 @@
 .dispatcher-dashboard-calendar-day:hover {
     background: #f1f5f9;
     color: #1e293b;
-    box-shadow: 0 2px 8px rgba(59,130,246,0.10);
+    box-shadow: 0 2px 8px rgb(59 130 246 / 10%);
     z-index: 3;
 }
 
@@ -212,10 +212,12 @@
     background: linear-gradient(135deg, #bbf7d0 0%, #22c55e 100%);
     color: #fff;
 }
+
 .dispatcher-dashboard-calendar-day[style*='#f59e0b'] {
     background: linear-gradient(135deg, #fef9c3 0%, #f59e0b 100%);
     color: #fff;
 }
+
 .dispatcher-dashboard-calendar-day[style*='#f1f5f9'] {
     background: #f1f5f9;
     color: #64748b;
@@ -309,54 +311,62 @@
 .dispatcher-dashboard-container .dispatcher-dashboard-calendar-day:hover {
     transform: scale(1.05);
     z-index: 10;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
 }
 
-@media (max-width: 1200px) {
+@media (width <= 1200px) {
     .dispatcher-dashboard-calendar-container {
-        padding: 10px 4px 16px 4px;
+        padding: 10px 4px 16px;
     }
+
     .dispatcher-dashboard-calendar-day {
         min-height: 32px;
         max-height: 40px;
         font-size: 13px;
         border-radius: 6px;
     }
+
     .dispatcher-dashboard-day-number {
         font-size: 13px;
     }
+
     .dispatcher-dashboard-day-stats {
         font-size: 8px;
     }
 }
 
-@media (max-width: 800px) {
+@media (width <= 800px) {
     .dispatcher-dashboard-calendar-container {
-        padding: 4px 0 10px 0;
+        padding: 4px 0 10px;
     }
+
     .dispatcher-dashboard-calendar-day {
         min-height: 22px;
         max-height: 28px;
         font-size: 10px;
         border-radius: 4px;
     }
+
     .dispatcher-dashboard-day-number {
         font-size: 11px;
     }
+
     .dispatcher-dashboard-day-stats {
         font-size: 7px;
     }
 }
 
-@media (max-width: 500px) {
+@media (width <= 500px) {
     .dispatcher-dashboard-calendar-container {
-        padding: 2px 0 6px 0;
+        padding: 2px 0 6px;
     }
+
     .dispatcher-dashboard-calendar-day {
         min-height: 16px;
         max-height: 20px;
         font-size: 8px;
     }
+
     .dispatcher-dashboard-day-number {
         font-size: 9px;
     }
@@ -411,14 +421,14 @@
     width: 16px;
     height: 16px;
     border-radius: 4px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid rgb(0 0 0 / 10%);
 }
 
 .heatmap-container {
     background: white;
     border-radius: 12px;
     padding: 20px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 10%), 0 2px 4px -1px rgb(0 0 0 / 6%);
     border: 1px solid #e2e8f0;
     width: 100%;
     overflow: hidden;
@@ -496,7 +506,7 @@
 }
 
 .heatmap-row:hover {
-    background: rgba(59, 130, 246, 0.02);
+    background: rgb(59 130 246 / 2%);
     border-radius: 8px;
     transform: translateX(2px);
 }
@@ -509,7 +519,7 @@
     align-items: center;
     justify-content: center;
     padding: 8px 16px;
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     margin-right: 8px;
@@ -536,7 +546,7 @@
     justify-content: center;
     border-radius: 6px;
     margin-right: 2px;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border: 1px solid rgb(0 0 0 / 5%);
     cursor: pointer;
     transition: all 0.2s ease;
     position: relative;
@@ -545,14 +555,14 @@
 
 .heatmap-cell:hover {
     transform: scale(1.05);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 8px rgb(0 0 0 / 15%);
     z-index: 5;
     border: 2px solid #3b82f6;
 }
 
 .heatmap-cell.today {
     border: 2px solid #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 0 2px rgb(59 130 246 / 20%);
 }
 
 .heatmap-cell.future {
@@ -587,22 +597,14 @@
     font-weight: 700;
 }
 
-/* Performance card improvements for heatmap view */
-.dispatcher-dashboard-performance-card {
-    transition: all 0.3s ease;
-}
-
-.dispatcher-dashboard-performance-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
+/* Дублікат видалено - використовується стиль з рядка 52 */
 
 /* ============================
    RESPONSIVE STYLES FOR HEATMAP
    ============================ */
 
 /* Desktop styles for wide screens */
-@media (min-width: 1600px) {
+@media (width >= 1600px) {
     .heatmap-dispatcher-name-header {
         min-width: 200px;
         max-width: 350px;
@@ -619,7 +621,7 @@
     }
 }
 
-@media (max-width: 1400px) {
+@media (width <= 1400px) {
     .heatmap-dispatcher-name-header {
         min-width: 160px;
         max-width: 280px;
@@ -632,7 +634,7 @@
     }
 }
 
-@media (max-width: 1200px) {
+@media (width <= 1200px) {
     .heatmap-dispatcher-name-header {
         min-width: 140px;
         max-width: 240px;
@@ -649,7 +651,7 @@
     }
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
     .heatmap-header {
         flex-direction: column;
         align-items: flex-start;
@@ -680,7 +682,7 @@
     }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .dispatcher-dashboard-container {
         padding: 16px;
     }
@@ -721,7 +723,7 @@
     }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
     .dispatcher-dashboard-header h2 {
         font-size: 18px;
     }
@@ -730,7 +732,7 @@
         min-width: 100px;
         max-width: 160px;
         font-size: 11px;
-        padding: 8px 8px;
+        padding: 8px;
     }
     
     .heatmap-dispatcher-name {

@@ -36,10 +36,10 @@ class GeocoderService
         if (empty($query) || strlen($query) < 3) {
             return [];
         }
-        
+
         // --- Step 1: Search in address_cache ---
         $addressCacheResults = $this->searchAddressCache($query);
-        
+
         if (!empty($addressCacheResults)) {
             // Geocoding cache hit - no logging for normal operations
             return $addressCacheResults;
@@ -47,15 +47,15 @@ class GeocoderService
 
         // --- Step 2: Search in geocoding_cache ---
         $geocodingCacheResults = $this->searchGeocodingCache($query);
-        
+
         if (!empty($geocodingCacheResults)) {
             // Geocoding cache hit - no logging for normal operations
             return $geocodingCacheResults;
         }
-        
+
         // --- Step 3: Search via Mapbox API ---
         $mapboxResults = $this->searchMapbox($query);
-        
+
         if (!empty($mapboxResults)) {
             // Mapbox API call completed - no logging for normal operations
             return $mapboxResults;
@@ -74,14 +74,14 @@ class GeocoderService
     public function getBestCoordinatesForLocation(string $query): ?array
     {
         $suggestions = $this->getLocationSuggestions($query);
-        
-        if(empty($suggestions)) {
+
+        if (empty($suggestions)) {
             // Geocoding failed - no logging for normal operations
             return null;
         }
-        
+
         // Geocoding successful - no logging for normal operations
-        
+
         // The first result is always the best due to our sorting and filtering logic
         return $suggestions[0];
     }
@@ -101,7 +101,7 @@ class GeocoderService
         if ($cacheResult) {
             return $cacheResult;
         }
-        
+
         // Step 2: Use Mapbox reverse geocoding API
         $mapboxResult = $this->reverseGeocodeMapbox($lat, $lon);
         if ($mapboxResult) {
@@ -109,9 +109,9 @@ class GeocoderService
             $this->cacheReverseGeocodeResult($mapboxResult, $lat, $lon);
             return $mapboxResult;
         }
-        
+
         // Reverse geocoding failed - no logging needed for normal operation
-        
+
         return null;
     }
 
@@ -120,7 +120,9 @@ class GeocoderService
      */
     private function searchAddressCacheByCoordinates(float $lat, float $lon): ?array
     {
-        if (!$this->pdo) return null;
+        if (!$this->pdo) {
+            return null;
+        }
 
         // Round coordinates to match database precision (8 decimal places for lat, 8 for lon)
         $roundedLat = round($lat, 8);
@@ -131,11 +133,11 @@ class GeocoderService
                 FROM address_cache 
                 WHERE ABS(lat - ?) < 0.00000001 AND ABS(lon - ?) < 0.00000001
                 LIMIT 1";
-        
+
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([$roundedLat, $roundedLon]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         // If no exact match, search within approximately 1km radius (0.009 degrees ≈ 1km)
         if (!$result) {
             $sql = "SELECT formatted_address, city, state, zip_code, lat, lon
@@ -143,12 +145,12 @@ class GeocoderService
                     WHERE ABS(lat - ?) < 0.009 AND ABS(lon - ?) < 0.009
                     ORDER BY (POW(lat - ?, 2) + POW(lon - ?, 2)) ASC
                     LIMIT 1";
-            
+
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([$roundedLat, $roundedLon, $roundedLat, $roundedLon]);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
         }
-        
+
         if ($result) {
             $countryInfo = $this->getCountryByState($result['state']);
             return [
@@ -165,7 +167,7 @@ class GeocoderService
                 'flag' => $countryInfo['flag']
             ];
         }
-        
+
         return null;
     }
 
@@ -183,7 +185,7 @@ class GeocoderService
 
         try {
             $endpoint = "/geocoding/v5/mapbox.places/{$lon},{$lat}.json";
-            
+
             $response = $client->request('GET', $endpoint, [
                 'query' => [
                     'access_token' => $this->mapboxAccessToken,
@@ -197,7 +199,7 @@ class GeocoderService
 
             if (json_last_error() === JSON_ERROR_NONE && !empty($data['features'])) {
                 $feature = $data['features'][0]; // Take the most relevant result
-                
+
                 $context = $feature['context'] ?? [];
                 $city = null;
                 $state = null;
@@ -232,9 +234,9 @@ class GeocoderService
                 if ($city && $state) {
                     $formattedAddress = $city . ', ' . $state . ($zip ? ' ' . $zip : '');
                     $countryInfo = $this->getCountryByState($state);
-                    
+
                     // Mapbox reverse geocoding successful
-                    
+
                     return [
                         'formattedAddress' => $formattedAddress,
                         'city' => $city,
@@ -250,9 +252,8 @@ class GeocoderService
                     ];
                 }
             }
-            
+
             // Mapbox reverse geocoding returned no usable results
-            
         } catch (RequestException $e) {
             Logger::error("Mapbox reverse geocoding API request failed", [
                 'lat' => $lat,
@@ -260,7 +261,7 @@ class GeocoderService
                 'error' => $e->getMessage()
             ]);
         }
-        
+
         return null;
     }
 
@@ -269,7 +270,9 @@ class GeocoderService
      */
     private function cacheReverseGeocodeResult(array $result, float $lat, float $lon): void
     {
-        if (!$this->pdo || empty($result['formattedAddress'])) return;
+        if (!$this->pdo || empty($result['formattedAddress'])) {
+            return;
+        }
 
         // Round coordinates to match database precision (8 decimal places)
         $roundedLat = round($lat, 8);
@@ -279,9 +282,9 @@ class GeocoderService
                 VALUES (:search_query, :formatted_address, :city, :state, :zip_code, :lat, :lon, CURRENT_TIMESTAMP)
                 ON DUPLICATE KEY UPDATE
                     last_used = CURRENT_TIMESTAMP";
-        
+
         $stmt = $this->pdo->prepare($sql);
-        
+
         try {
             $stmt->execute([
                 ':search_query' => "GPS:{$roundedLat},{$roundedLon}",
@@ -292,7 +295,7 @@ class GeocoderService
                 ':lat' => $roundedLat,
                 ':lon' => $roundedLon,
             ]);
-            
+
             // Cached reverse geocoding result
         } catch (Exception $e) {
             Logger::error("Failed to cache reverse geocoding result", [
@@ -308,7 +311,9 @@ class GeocoderService
      */
     private function searchAddressCache(string $query): array
     {
-        if (!$this->pdo) return [];
+        if (!$this->pdo) {
+            return [];
+        }
 
         $results = [];
         $zipCode = $this->extractZipCodeFromQuery($query);
@@ -322,7 +327,7 @@ class GeocoderService
                     WHERE zip_code = ? AND formatted_address LIKE ?
                     ORDER BY last_used DESC
                     LIMIT 10";
-            
+
             $likeQuery = preg_replace('/[,\\s]+/', ' ', str_replace($zipCode, '', $query));
             $likeQuery = trim($likeQuery);
             $params = [$zipCode, "%{$likeQuery}%"];
@@ -333,7 +338,7 @@ class GeocoderService
         } else {
             // Extract potential city and state from query
             $extractedLocation = $this->extractCityStateFromQuery($query);
-            
+
             if ($extractedLocation['city'] && $extractedLocation['state']) {
                 // If no ZIP in query, only search for results without ZIP codes
                 // If no results found, proceed to next stage (geocoding_cache -> mapbox)
@@ -342,12 +347,12 @@ class GeocoderService
                         WHERE city = ? AND state = ? AND (zip_code IS NULL OR zip_code = '')
                         ORDER BY last_used DESC
                     LIMIT 10";
-                
+
                 $params = [$extractedLocation['city'], $extractedLocation['state']];
-        
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
-        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute($params);
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } else {
                 // If no clear city/state format, return empty to proceed to geocoding_cache
                 return [];
@@ -359,7 +364,7 @@ class GeocoderService
         return array_map(function ($row) {
             $countryInfo = $this->getCountryByState($row['state']);
             $sourceLabel = $this->formatSourceLabel('cache');
-            
+
             return [
                 'formattedAddress' => $row['formatted_address'],
                 'city' => $row['city'],
@@ -375,7 +380,7 @@ class GeocoderService
             ];
         }, $results);
     }
-    
+
     /**
      * Determine country based on state/province code
      */
@@ -384,16 +389,16 @@ class GeocoderService
         $canadianProvinces = [
             'AB', 'BC', 'MB', 'NB', 'NL', 'NT', 'NS', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT'
         ];
-        
+
         $isCanadian = in_array(strtoupper($state), $canadianProvinces);
-        
+
         return [
             'country' => $isCanadian ? 'Canada' : 'United States',
             'countryCode' => $isCanadian ? 'CA' : 'US',
             'flag' => $isCanadian ? '🇨🇦' : '🇺🇸'
         ];
     }
-    
+
     /**
      * Format source label with emoji
      */
@@ -404,7 +409,7 @@ class GeocoderService
             'geocoding_cache' => '🗄️ Cached',
             'mapbox' => '🌐 Live'
         ];
-        
+
         return $sourceLabels[$source] ?? "📍 {$source}";
     }
 
@@ -415,7 +420,7 @@ class GeocoderService
     private function extractCityStateFromQuery(string $query): array
     {
         $result = ['city' => null, 'state' => null];
-        
+
         // First try: "City, State/Province" format (with comma)
         // Updated regex to support French characters, hyphens, apostrophes
         if (preg_match('/^(.+?),\s*([A-Z]{2})(?:\s|$)/i', trim($query), $matches)) {
@@ -427,10 +432,10 @@ class GeocoderService
             $result['city'] = trim($matches[1]);
             $result['state'] = strtoupper(trim($matches[2]));
         }
-        
+
         return $result;
     }
-    
+
 
 
 
@@ -439,7 +444,9 @@ class GeocoderService
      */
     private function searchGeocodingCache(string $query): array
     {
-        if (!$this->pdo) return [];
+        if (!$this->pdo) {
+            return [];
+        }
 
         $sql = "SELECT feature_data FROM geocoding_cache WHERE query = ? LIMIT 1";
         $stmt = $this->pdo->prepare($sql);
@@ -455,7 +462,7 @@ class GeocoderService
             Logger::error("JSON decode error for query '{$query}'", ['error' => json_last_error_msg()]);
             return [];
         }
-        
+
         return $this->parseAndNormalizeFeatures($features, 'geocoding_cache', $query);
     }
 
@@ -474,7 +481,7 @@ class GeocoderService
         try {
             $encodedQuery = urlencode($query);
             $endpoint = "/geocoding/v5/mapbox.places/{$encodedQuery}.json";
-            
+
             $types = 'postcode,place,address,region';
             // Prioritize postcode search for US ZIP codes or Canadian postal codes
             if (preg_match('/\\b\\d{5}\\b/', $query) || preg_match('/\\b[A-Z]\\d[A-Z]\\s?\\d[A-Z]\\d\\b/i', $query)) {
@@ -493,11 +500,11 @@ class GeocoderService
             if (json_last_error() === JSON_ERROR_NONE && !empty($data['features'])) {
                 $this->cacheGeocodingResponse($query, $data['features']);
                 $results = $this->parseAndNormalizeFeatures($data['features'], 'mapbox', $query);
-                
+
                 // Mapbox API call successful - no logging for normal operations
                 return $results;
             }
-            
+
             // Mapbox API returned no features - no logging for normal operations
             return [];
         } catch (RequestException $e) {
@@ -506,7 +513,7 @@ class GeocoderService
                 $responseBody = $e->getResponse()->getBody()->getContents();
                 if (strpos($responseBody, 'Invalid Token') !== false || strpos($responseBody, 'Not Authorized') !== false) {
                     Logger::error("Mapbox Geocoding API - Invalid Token", [
-                        'query' => $query, 
+                        'query' => $query,
                         'error' => $e->getMessage()
                     ]);
                     // For geocoding, we don't throw an exception since it's not critical for the app to continue
@@ -514,9 +521,9 @@ class GeocoderService
                     return [];
                 }
             }
-            
+
             Logger::error("Mapbox API request failed", [
-                'query' => $query, 
+                'query' => $query,
                 'error' => $e->getMessage(),
                 'status_code' => $e->getResponse() ? $e->getResponse()->getStatusCode() : 'no_response'
             ]);
@@ -529,13 +536,17 @@ class GeocoderService
      */
     private function parseAndNormalizeFeatures(array $features, string $source, string $query): array
     {
-        if (empty($features)) return [];
+        if (empty($features)) {
+            return [];
+        }
 
         $normalizedSuggestions = [];
         $referenceContext = null;
 
         foreach ($features as $feature) {
-            if (isset($feature['relevance']) && $feature['relevance'] < 0.5) continue;
+            if (isset($feature['relevance']) && $feature['relevance'] < 0.5) {
+                continue;
+            }
 
             $context = $feature['context'] ?? [];
             $city = null;
@@ -547,7 +558,9 @@ class GeocoderService
 
             foreach ($context as $ctx) {
                 $id = $ctx['id'] ?? '';
-                if (strpos($id, 'place') === 0) $city = $ctx['text'] ?? null;
+                if (strpos($id, 'place') === 0) {
+                    $city = $ctx['text'] ?? null;
+                }
                 if (strpos($id, 'region') === 0) {
                     $stateFullName = $ctx['text'] ?? null;
                     $state = $ctx['short_code'] ?? $stateFullName;
@@ -556,11 +569,17 @@ class GeocoderService
                         $state = end($parts);
                     }
                 }
-                if (strpos($id, 'postcode') === 0) $zip = $ctx['text'] ?? null;
+                if (strpos($id, 'postcode') === 0) {
+                    $zip = $ctx['text'] ?? null;
+                }
             }
-            
-            if (in_array('postcode', $feature['place_type'] ?? [])) $zip = $feature['text'] ?? null;
-            if (in_array('place', $feature['place_type'] ?? [])) $city = $feature['text'] ?? null;
+
+            if (in_array('postcode', $feature['place_type'] ?? [])) {
+                $zip = $feature['text'] ?? null;
+            }
+            if (in_array('place', $feature['place_type'] ?? [])) {
+                $city = $feature['text'] ?? null;
+            }
 
             if ($city && $state && $lat && $lon) {
                 if ($referenceContext === null) {
@@ -573,7 +592,7 @@ class GeocoderService
 
                 // Determine if query had ZIP to format address consistently
                 $queryHasZip = $this->queryHasZipCode($query);
-                
+
                 // Format address according to query type:
                 // If query has ZIP, include ZIP in formatted address
                 // If query has no ZIP, exclude ZIP from formatted address
@@ -581,10 +600,10 @@ class GeocoderService
                 if ($queryHasZip && $zip) {
                     $formattedAddress .= ' ' . $zip;
                 }
-                
+
                 $countryInfo = $this->getCountryByState($state);
                 $sourceLabel = $this->formatSourceLabel($source);
-                
+
                 // Apply ZIP filtering: only include suggestions that match query type
                 $suggestionHasZip = !empty($zip);
                 if ($queryHasZip === $suggestionHasZip) {
@@ -604,7 +623,7 @@ class GeocoderService
                 }
             }
         }
-        
+
         // No need to sort by ZIP since all suggestions now match the query type
 
         if (!empty($normalizedSuggestions)) {
@@ -645,14 +664,16 @@ class GeocoderService
      */
     private function cacheGeocodingResponse(string $query, array $features): void
     {
-        if (empty($features) || !$this->pdo) return;
+        if (empty($features) || !$this->pdo) {
+            return;
+        }
 
         $sql = "INSERT INTO geocoding_cache (query, feature_data)
                 VALUES (:query, :feature_data)
                 ON DUPLICATE KEY UPDATE
                     feature_data = VALUES(feature_data),
                     last_used = CURRENT_TIMESTAMP";
-        
+
         $stmt = $this->pdo->prepare($sql);
         try {
             $stmt->execute([':query' => $query, ':feature_data' => json_encode($features)]);
@@ -667,22 +688,26 @@ class GeocoderService
      */
     private function warmUpAddressCache(array $suggestions, string $query, bool $queryHasZip): void
     {
-        if (empty($suggestions) || !$this->pdo) return;
+        if (empty($suggestions) || !$this->pdo) {
+            return;
+        }
 
         // Filter suggestions based on query type
-        $filteredSuggestions = array_filter($suggestions, function($suggestion) use ($queryHasZip) {
+        $filteredSuggestions = array_filter($suggestions, function ($suggestion) use ($queryHasZip) {
             $suggestionHasZip = !empty($suggestion['zip_code']);
             return $queryHasZip === $suggestionHasZip; // Only keep matching types
         });
 
         $suggestionsToCache = array_slice($filteredSuggestions, 0, 5);
-        if (empty($suggestionsToCache)) return;
+        if (empty($suggestionsToCache)) {
+            return;
+        }
 
         $sql = "INSERT INTO address_cache (search_query, formatted_address, city, state, zip_code, lat, lon, last_used)
                 VALUES (:search_query, :formatted_address, :city, :state, :zip_code, :lat, :lon, CURRENT_TIMESTAMP)
                 ON DUPLICATE KEY UPDATE
                     last_used = CURRENT_TIMESTAMP";
-        
+
         $stmt = $this->pdo->prepare($sql);
 
         foreach ($suggestionsToCache as $s) {
@@ -692,7 +717,7 @@ class GeocoderService
                 if ($queryHasZip && !empty($s['zip_code'])) {
                     $formattedAddress .= ' ' . $s['zip_code'];
                 }
-                
+
                 $stmt->execute([
                     ':search_query' => $query,
                     ':formatted_address' => $formattedAddress,
@@ -707,4 +732,4 @@ class GeocoderService
             }
         }
     }
-} 
+}

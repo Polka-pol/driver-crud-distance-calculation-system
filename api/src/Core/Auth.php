@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core;
 
 use Firebase\JWT\JWT;
@@ -28,7 +29,7 @@ class Auth
                 self::sendError('Forbidden: You do not have permission to access this resource.', 403);
             }
         }
-        
+
         return $decodedToken->data;
     }
 
@@ -65,7 +66,8 @@ class Auth
     /**
      * Sends a JSON error response and terminates the script.
      */
-    private static function sendError(string $message, int $statusCode) {
+    private static function sendError(string $message, int $statusCode)
+    {
         http_response_code($statusCode);
         header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => $message]);
@@ -82,4 +84,4 @@ class Auth
         $decodedToken = self::getDecodedToken();
         return $decodedToken->data ?? null;
     }
-} 
+}

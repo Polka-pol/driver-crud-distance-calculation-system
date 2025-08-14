@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
-import { formatEDTTime, getRelativeTime } from '../utils/timeUtils';
+import { formatTimeInAppTZ, getRelativeTime } from '../utils/timeUtils';
 import './AdminPanel.css';
+import { usePermissions } from '../context/PermissionsContext';
 
-const ActivityDashboard = () => {
+const ActivityDashboard = ({ serverTimeOffset = 0 }) => {
+    const { has } = usePermissions();
     const [analytics, setAnalytics] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -30,8 +32,14 @@ const ActivityDashboard = () => {
         };
 
         // Initial fetch
-        fetchAnalytics();
-    }, []);
+        if (has('dashboard.analytics.view')) {
+            fetchAnalytics();
+        } else {
+            setAnalytics(null);
+            setError('You do not have permission to view analytics.');
+            setIsLoading(false);
+        }
+    }, [has]);
 
     if (isLoading) {
         return <p>Loading dashboard...</p>;
@@ -47,9 +55,9 @@ const ActivityDashboard = () => {
     
     const { summary, user_daily_stats, db_analytics, recent_activity } = analytics;
 
-    // Use centralized EDT time formatting
+    // Use centralized App TZ time formatting
     const formatTime = (dateTimeString) => {
-        return formatEDTTime(dateTimeString);
+        return formatTimeInAppTZ(dateTimeString);
     };
 
     const getActionIcon = (action) => {
@@ -77,7 +85,7 @@ const ActivityDashboard = () => {
 
     // Use centralized relative time calculation
     const formatRelativeTime = (dateString) => {
-        return getRelativeTime(dateString);
+        return getRelativeTime(dateString, serverTimeOffset);
     };
 
 

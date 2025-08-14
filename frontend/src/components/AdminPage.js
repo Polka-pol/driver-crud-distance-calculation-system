@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import './AdminPage.css';
-import ActivityDashboard from './ActivityDashboard'; // Import the new component
-import DatabaseAnalytics from './DatabaseAnalytics'; // Import new component
-import SessionManagement from './SessionManagement'; // Import Session Management component
+import ActivityDashboard from './ActivityDashboard';
+import DatabaseAnalytics from './DatabaseAnalytics';
+import SessionManagement from './SessionManagement';
+import TimezoneSettings from './TimezoneSettings';
+import { usePermissions } from '../context/PermissionsContext';
+import RbacManager from './RbacManager';
 
-const AdminPage = ({ onBack, user }) => {
-    const isAdmin = user && user.role === 'admin';
+const AdminPage = ({ onBack, user, serverTimeOffset = 0 }) => {
+    const { has } = usePermissions();
+    const isAdmin = has('sessions.manage');
     // Default to 'sessions' if admin, otherwise 'activity'
     const [activeTab, setActiveTab] = useState(isAdmin ? 'sessions' : 'activity');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -20,11 +24,15 @@ const AdminPage = ({ onBack, user }) => {
     const renderContent = () => {
         switch (activeTab) {
             case 'activity':
-                return <ActivityDashboard />;
+                return <ActivityDashboard serverTimeOffset={serverTimeOffset} />;
             case 'db-analytics':
-                return isAdmin ? <DatabaseAnalytics /> : <ActivityDashboard />;
+                return has('dashboard.analytics.view') ? <DatabaseAnalytics /> : <ActivityDashboard serverTimeOffset={serverTimeOffset} />;
             case 'sessions':
-                return isAdmin ? <SessionManagement /> : <ActivityDashboard />;
+                return has('sessions.manage') ? <SessionManagement /> : <ActivityDashboard serverTimeOffset={serverTimeOffset} />;
+            case 'timezone-settings':
+                return has('settings.timezone.view') ? <TimezoneSettings /> : <ActivityDashboard serverTimeOffset={serverTimeOffset} />;
+            case 'rbac':
+                return (has('rbac.roles.manage') || has('rbac.permissions.manage')) ? <RbacManager /> : <ActivityDashboard serverTimeOffset={serverTimeOffset} />;
             default:
                 return isAdmin ? <SessionManagement /> : <ActivityDashboard />;
         }
@@ -77,12 +85,20 @@ const AdminPage = ({ onBack, user }) => {
                     </button>
                 </div>
                 <ul className="admin-menu">
-                    {isAdmin && (
+                    {has('sessions.manage') && (
                         <li
                             className={activeTab === 'sessions' ? 'active' : ''}
                             onClick={() => handleMenuItemClick('sessions')}
                         >
                             User & Session Management
+                        </li>
+                    )}
+                    {has('settings.timezone.view') && (
+                        <li
+                            className={activeTab === 'timezone-settings' ? 'active' : ''}
+                            onClick={() => handleMenuItemClick('timezone-settings')}
+                        >
+                            Timezone Settings
                         </li>
                     )}
                     <li
@@ -91,12 +107,20 @@ const AdminPage = ({ onBack, user }) => {
                     >
                         Activity Dashboard
                     </li>
-                    {isAdmin && (
+                    {has('dashboard.analytics.view') && (
                         <li
                             className={activeTab === 'db-analytics' ? 'active' : ''}
                             onClick={() => handleMenuItemClick('db-analytics')}
                         >
                             Database Analytics
+                        </li>
+                    )}
+                    {(has('rbac.roles.manage') || has('rbac.permissions.manage')) && (
+                        <li
+                            className={activeTab === 'rbac' ? 'active' : ''}
+                            onClick={() => handleMenuItemClick('rbac')}
+                        >
+                            Roles & Permissions
                         </li>
                     )}
                 </ul>

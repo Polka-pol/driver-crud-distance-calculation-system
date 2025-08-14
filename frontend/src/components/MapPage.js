@@ -5,7 +5,11 @@ import 'leaflet/dist/leaflet.css';
 import './MapPage.css';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
-import { getCurrentEDT } from '../utils/timeUtils';
+import {
+  getCurrentTimeInAppTZ,
+  parseAppTzDateTimeToEpochMs,
+} from '../utils/timeUtils';
+import { usePermissions } from '../context/PermissionsContext';
 
 // Fix default markers for Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -16,6 +20,7 @@ L.Icon.Default.mergeOptions({
 });
 
 function MapPage({ onBack, user }) {
+  const { has } = usePermissions();
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -68,8 +73,13 @@ function MapPage({ onBack, user }) {
   }, []);
 
   useEffect(() => {
-    fetchTrucks();
-  }, [fetchTrucks]);
+    if (has('trucks.map.view')) {
+      fetchTrucks();
+    } else {
+      setError('You do not have permission to view the map.');
+      setLoading(false);
+    }
+  }, [fetchTrucks, has]);
 
   // Create custom icons for each status
   const createCustomIcon = (status) => {
@@ -85,14 +95,23 @@ function MapPage({ onBack, user }) {
   // Filter trucks based on selected status, updated filter, and type filters
   const filteredTrucks = useMemo(() => {
     return trucks.filter(truck => {
+      // Ensure we only render trucks with valid cached coordinates; no geocoding on client
+      const rawLat = truck.lat ?? truck.latitude;
+      const rawLon = truck.lon ?? truck.longitude;
+      const latNum = Number(rawLat);
+      const lonNum = Number(rawLon);
+      if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) return false;
       // Status filter
       const statusMatch = selectedStatus === 'all' || truck.status === selectedStatus;
       
       // Updated filter logic (same as in App.js)
       let updatedMatch = true;
       if (updatedFilter) {
-        const now = getCurrentEDT();
-        const truckDate = new Date(truck.arrival_time);
+        const now = getCurrentTimeInAppTZ();
+        const ms = parseAppTzDateTimeToEpochMs(
+          String(truck.arrival_time).replace(' ', 'T') + ':00'
+        );
+        const truckDate = Number.isFinite(ms) ? new Date(ms) : new Date(NaN);
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const truckDay = new Date(truckDate.getFullYear(), truckDate.getMonth(), truckDate.getDate());
         const diffDays = Math.floor((today - truckDay) / (1000 * 60 * 60 * 24));
@@ -249,11 +268,16 @@ function MapPage({ onBack, user }) {
           />
           
           {filteredTrucks.map(truck => {
+            const rawLat = truck.lat ?? truck.latitude;
+            const rawLon = truck.lon ?? truck.longitude;
+            const latNum = Number(rawLat);
+            const lonNum = Number(rawLon);
+            if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) return null;
             const color = statusColors[truck.status] || statusColors.default;
             return (
               <Marker
                 key={truck.id}
-                position={[truck.lat, truck.lon]}
+                position={[latNum, lonNum]}
                 icon={createCustomIcon(truck.status)}
               >
                 <Popup>

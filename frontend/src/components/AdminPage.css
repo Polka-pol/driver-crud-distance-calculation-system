@@ -1,9 +1,9 @@
 /* General layout for the admin page */
 .admin-page-layout {
     display: flex;
-    background-color: #ffffff;
+    background-color: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 5%);
     min-height: 70vh; /* Ensure it takes up a good portion of the screen height */
     overflow: hidden; /* Contains the border radius */
     position: relative;
@@ -22,7 +22,7 @@
     padding: 10px 12px;
     color: white;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
     align-items: center;
     gap: 8px;
     font-weight: 500;
@@ -72,7 +72,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgb(0 0 0 / 50%);
     z-index: 998;
 }
 
@@ -155,7 +155,7 @@
 .admin-main-content {
     background-color: #fff;
     flex-grow: 1;
-    padding: 20px 30px 30px 30px;
+    padding: 20px 30px 30px;
 }
 
 .admin-main-content h3 {
@@ -164,7 +164,7 @@
 }
 
 /* Mobile Responsive Design */
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .admin-page-layout {
         border-radius: 0;
         min-height: 100vh;
@@ -196,7 +196,7 @@
         width: 260px;
         z-index: 1000;
         transition: left 0.3s ease;
-        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+        box-shadow: 2px 0 10px rgb(0 0 0 / 30%);
     }
 
     /* Show sidebar when mobile menu is open */
@@ -212,7 +212,7 @@
     /* Adjust main content for mobile */
     .admin-main-content {
         width: 100%;
-        padding: 60px 15px 20px 15px;
+        padding: 60px 15px 20px;
     }
 
     /* Make content header responsive */
@@ -224,13 +224,13 @@
 }
 
 /* Tablet responsive design */
-@media (max-width: 1024px) and (min-width: 769px) {
+@media (width <= 1024px) and (width >= 769px) {
     .admin-sidebar {
         width: 200px;
     }
 
     .admin-main-content {
-        padding: 20px 25px 25px 25px;
+        padding: 20px 25px 25px;
     }
 
     .admin-sidebar-header h3 {
@@ -244,9 +244,9 @@
 }
 
 /* Extra small screens */
-@media (max-width: 480px) {
+@media (width <= 480px) {
     .admin-main-content {
-        padding: 55px 10px 15px 10px;
+        padding: 55px 10px 15px;
     }
 
     .admin-content-header {

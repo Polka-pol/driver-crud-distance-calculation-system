@@ -12,7 +12,4 @@ body.modal-open {
     overflow-y: auto;
 }
 
-/* Prevent touch scrolling on mobile */
-body.modal-open {
-    -webkit-overflow-scrolling: auto;
-} 
+/* Дублікат видалено - використовується стиль з рядка 2 */ 

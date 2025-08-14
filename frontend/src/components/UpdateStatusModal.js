@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './DriverUpdates.css';
-import { getCurrentEDT, formatEDTDate } from '../utils/timeUtils';
+import { getCurrentTimeInAppTZ, formatEDTDate } from '../utils/timeUtils';
 
 const UpdateStatusModal = ({ show, onClose, truck, onSave, onDelete }) => {
     const [reason, setReason] = useState('');
@@ -8,14 +8,13 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave, onDelete }) => {
     const [comment, setComment] = useState('');
     const [showError, setShowError] = useState(false);
 
-    // Function to get today's date in YYYY-MM-DD format using EDT
-    const getTodayDate = () => {
-        const today = getCurrentEDT();
+    const getTodayDate = useCallback(() => {
+        const today = getCurrentTimeInAppTZ();
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
-    };
+    }, []);
 
     // Check if truck has existing no update status
     const hasExistingNoUpdate = () => {
@@ -33,7 +32,7 @@ const UpdateStatusModal = ({ show, onClose, truck, onSave, onDelete }) => {
             setComment('');
         }
         setShowError(false);
-    }, [truck]);
+    }, [truck, getTodayDate]);
 
     if (!show) {
         return null;

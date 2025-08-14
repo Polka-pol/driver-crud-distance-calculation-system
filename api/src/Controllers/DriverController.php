@@ -43,10 +43,10 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // Normalize phone number for search (remove all non-digits)
             $normalizedPhone = preg_replace('/[^\d]/', '', $cellPhone);
-            
+
             // Find driver by cell phone using flexible search
             $stmt = $pdo->prepare('
                 SELECT * FROM Trucks 
@@ -97,7 +97,7 @@ class DriverController
 
             $issuedAt = time();
             $expire = $issuedAt + (60 * 60 * 24 * 7); // Expires in 7 days
-            
+
             $payload = [
                 'iat' => $issuedAt,
                 'exp' => $expire,
@@ -129,7 +129,6 @@ class DriverController
                 'token' => $jwt,
                 'driver' => $driverData
             ]);
-
         } catch (\Exception $e) {
             Logger::error('Driver login failed', ['error' => $e->getMessage(), 'cell_phone' => $cellPhone]);
             self::sendResponse(['success' => false, 'message' => 'Login failed. Please try again.'], 500);
@@ -159,10 +158,10 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // Normalize phone number for search (remove all non-digits)
             $normalizedPhone = preg_replace('/[^\d]/', '', $cellPhone);
-            
+
             // Find driver by cell phone using flexible search
             $stmt = $pdo->prepare('
                 SELECT ID, CellPhone, DriverName, password_hash FROM Trucks 
@@ -206,7 +205,6 @@ class DriverController
                 'success' => true,
                 'message' => 'Password set successfully. You can now log in.'
             ]);
-
         } catch (PDOException $e) {
             Logger::error('Driver password setup failed', ['error' => $e->getMessage(), 'cell_phone' => $cellPhone]);
             self::sendResponse(['success' => false, 'message' => 'Failed to set password. Please try again.'], 500);
@@ -233,25 +231,25 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // ОТРИМАТИ СТАРЕ ЗНАЧЕННЯ (ДО оновлення)
             $oldLocationStmt = $pdo->prepare("SELECT CityStateZip, TruckNumber FROM Trucks WHERE ID = :ID");
             $oldLocationStmt->execute(['ID' => $driverData['id']]);
             $oldLocationData = $oldLocationStmt->fetch(PDO::FETCH_ASSOC);
             $oldLocation = $oldLocationData['CityStateZip'] ?? null;
             $truckNumber = $oldLocationData['TruckNumber'] ?? 'unknown';
-            
+
             // ЗАПИСАТИ В ІСТОРІЮ (якщо є зміна локації) - ДО оновлення
             if (!empty($data['cityStateZip']) && $oldLocation !== $data['cityStateZip']) {
                 $oldLocationForLog = $oldLocation ?? 'No previous location';
-                
+
                 Logger::info('Driver location change detected', [
                     'driver_id' => $driverData['id'],
                     'old_location' => $oldLocation,
                     'new_location' => $data['cityStateZip'],
                     'will_log' => true
                 ]);
-                
+
                 // Використовуємо TruckController::logLocationChange
                 \App\Controllers\TruckController::logLocationChange($pdo, $driverData['id'], $truckNumber, $oldLocationForLog, $data['cityStateZip'], null);
             } else {
@@ -260,7 +258,7 @@ class DriverController
                     'location' => $oldLocation
                 ]);
             }
-            
+
             $updateData = [
                 'CityStateZip' => $data['cityStateZip'],
                 'ID' => $driverData['id']
@@ -274,8 +272,9 @@ class DriverController
 
             // Handle timestamp update from phone
             if (isset($data['updated_at'])) {
-                // Convert phone time to EDT
-                $updateData['updated_at'] = EDTTimeConverter::convertPhoneTimeToEDT($data['updated_at']);
+                // Parse phone time and store UTC
+                $utc = \App\Core\TimeService::parseFromClientToUtc($data['updated_at']);
+                $updateData['updated_at'] = $utc->format('Y-m-d H:i:s');
             }
 
             $sql = "UPDATE Trucks SET CityStateZip = :CityStateZip";
@@ -292,7 +291,7 @@ class DriverController
             $stmt = $pdo->prepare($sql);
             $executeData = $updateData;
             if (!isset($executeData['updated_at'])) {
-                $executeData['edt_time'] = EDTTimeConverter::getCurrentEDT();
+                $executeData['edt_time'] = \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s');
             }
             $stmt->execute($executeData);
 
@@ -312,7 +311,6 @@ class DriverController
                 'success' => true,
                 'message' => $locationChanged ? 'Location updated successfully.' : 'Location confirmed as current.'
             ]);
-
         } catch (PDOException $e) {
             Logger::error('Driver location update failed', ['error' => $e->getMessage(), 'driver_id' => $driverData['id']]);
             self::sendResponse(['success' => false, 'message' => 'Failed to update location.'], 500);
@@ -339,7 +337,7 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             $stmt = $pdo->prepare('UPDATE Trucks SET fcm_token = :fcm_token WHERE ID = :id');
             $stmt->execute([
                 'fcm_token' => $data['fcmToken'],
@@ -350,7 +348,6 @@ class DriverController
                 'success' => true,
                 'message' => 'FCM token updated successfully.'
             ]);
-
         } catch (PDOException $e) {
             Logger::error('FCM token update failed', ['error' => $e->getMessage(), 'driver_id' => $driverData['id']]);
             self::sendResponse(['success' => false, 'message' => 'Failed to update FCM token.'], 500);
@@ -386,12 +383,12 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // Update status in database
             $stmt = $pdo->prepare('UPDATE Trucks SET Status = :status, updated_at = :edt_time, updated_by = :updated_by WHERE ID = :id');
             $stmt->execute([
                 'status' => $status,
-                'edt_time' => EDTTimeConverter::getCurrentEDT(),
+                'edt_time' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'),
                 'updated_by' => $driverData['driverName'] ?? 'Driver App',
                 'id' => $driverData['id']
             ]);
@@ -409,7 +406,6 @@ class DriverController
                 'message' => 'Status updated successfully.',
                 'status' => $status
             ]);
-
         } catch (PDOException $e) {
             Logger::error('Driver status update failed', ['error' => $e->getMessage(), 'driver_id' => $driverData['id']]);
             self::sendResponse(['success' => false, 'message' => 'Failed to update status. Please try again.'], 500);
@@ -429,7 +425,7 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             $stmt = $pdo->prepare('SELECT * FROM Trucks WHERE ID = :id');
             $stmt->execute(['id' => $driverData['id']]);
             $driver = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -446,7 +442,6 @@ class DriverController
                 'success' => true,
                 'data' => $driver
             ]);
-
         } catch (PDOException $e) {
             Logger::error('Get driver profile failed', ['error' => $e->getMessage(), 'driver_id' => $driverData['id']]);
             self::sendResponse(['success' => false, 'message' => 'Failed to get profile.'], 500);
@@ -483,7 +478,6 @@ class DriverController
                     ]
                 ]
             ]);
-
         } catch (Exception $e) {
             Logger::error('Get driver activity logs failed', ['error' => $e->getMessage(), 'driver_id' => $driverData['id']]);
             self::sendResponse(['success' => false, 'message' => 'Failed to get activity logs.'], 500);
@@ -515,14 +509,13 @@ class DriverController
             }
 
             $decoded = JWT::decode($jwt, new \Firebase\JWT\Key($secretKey, 'HS256'));
-            
+
             if (!isset($decoded->data) || $decoded->data->role !== 'driver') {
                 self::sendResponse(['success' => false, 'message' => 'Invalid token or insufficient permissions.'], 403);
                 return null;
             }
 
             return (array)$decoded->data;
-
         } catch (\Exception $e) {
             Logger::warning('Driver JWT validation failed', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Invalid or expired token.'], 401);
@@ -536,7 +529,7 @@ class DriverController
     private static function handleFailedLogin($cellPhone, $reason)
     {
         Logger::warning('Driver login failed', ['cell_phone' => $cellPhone, 'reason' => $reason]);
-        
+
         // Try to find driver ID for logging, but don't fail if not found
         try {
             $pdo = Database::getConnection();
@@ -551,7 +544,7 @@ class DriverController
                 'cellPhone' => $cellPhone
             ]);
             $driver = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if ($driver) {
                 DriverActivityLogger::log('driver_login_failure', [
                     'cell_phone' => $cellPhone,
@@ -559,12 +552,11 @@ class DriverController
                     'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
                 ], $driver['ID']);
             } else {
-
             }
         } catch (PDOException $e) {
             Logger::error('Failed to log driver login failure', ['error' => $e->getMessage()]);
         }
-        
+
         self::sendResponse(['success' => false, 'message' => 'Invalid credentials.'], 401);
     }
 
@@ -580,7 +572,7 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             $stmt = $pdo->prepare("
                 SELECT 
                     lo.id,
@@ -615,6 +607,7 @@ class DriverController
                     $totalMiles = $offer['driver_distance_miles'] + $offer['delivery_distance_miles'];
                 }
 
+                // Normalize time fields: convert UTC from DB to App TZ ISO where presented to user
                 $result[] = [
                     'id' => (int)$offer['id'],
                     'load_id' => (int)$offer['load_id'],
@@ -627,8 +620,8 @@ class DriverController
                     'dimensions' => $offer['dimensions'],
                     'proposed_cost_by_user' => (float)$offer['proposed_cost_by_user'],
                     'offer_status' => $offer['offer_status'],
-                    'created_at' => $offer['created_at'],
-                    'viewed_at' => $offer['viewed_at'],
+                    'created_at' => $offer['created_at'] ? \App\Core\TimeService::convertUtcToAppTz(new \DateTimeImmutable($offer['created_at'], new \DateTimeZone('UTC')))->format(DATE_ATOM) : null,
+                    'viewed_at' => $offer['viewed_at'] ? \App\Core\TimeService::convertUtcToAppTz(new \DateTimeImmutable($offer['viewed_at'], new \DateTimeZone('UTC')))->format(DATE_ATOM) : null,
                     'unread_messages' => (int)$offer['unread_messages']
                 ];
             }
@@ -638,7 +631,6 @@ class DriverController
                 'offers' => $result,
                 'total' => count($result)
             ]);
-
         } catch (Exception $e) {
             Logger::error('Failed to get driver offers', [
                 'driver_id' => $driver['id'],
@@ -660,7 +652,7 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // Get offer details
             $stmt = $pdo->prepare("
                 SELECT 
@@ -691,7 +683,7 @@ class DriverController
                     WHERE id = ?
                 ");
                 $updateStmt->execute([$offerId]);
-                
+
                 DriverActivityLogger::log('offer_viewed', [
                     'offer_id' => $offerId,
                     'load_id' => $offer['load_id']
@@ -727,7 +719,6 @@ class DriverController
                     'responded_at' => $offer['responded_at']
                 ]
             ]);
-
         } catch (Exception $e) {
             Logger::error('Failed to get offer details', [
                 'offer_id' => $offerId,
@@ -749,7 +740,7 @@ class DriverController
         }
 
         $data = json_decode(file_get_contents('php://input'), true);
-        
+
         if (!isset($data['proposed_cost'])) {
             self::sendResponse(['success' => false, 'message' => 'Proposed cost is required'], 400);
             return;
@@ -765,7 +756,7 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // Check if offer exists and belongs to the driver
             $stmt = $pdo->prepare("
                 SELECT id, offer_status, load_id 
@@ -818,7 +809,6 @@ class DriverController
                 'proposed_cost' => $proposedCost,
                 'offer_status' => 'driver_interested'
             ]);
-
         } catch (Exception $e) {
             Logger::error('Failed to propose price', [
                 'offer_id' => $offerId,
@@ -840,7 +830,7 @@ class DriverController
         }
 
         $data = json_decode(file_get_contents('php://input'), true);
-        
+
         if (!isset($data['offer_id']) || !isset($data['message_text'])) {
             self::sendResponse(['success' => false, 'message' => 'offer_id and message_text are required'], 400);
             return;
@@ -853,7 +843,7 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // Check if offer belongs to the driver
             $stmt = $pdo->prepare("
                 SELECT id, load_id 
@@ -890,7 +880,6 @@ class DriverController
                 'message_id' => (int)$messageId,
                 'status' => 'sent'
             ]);
-
         } catch (Exception $e) {
             Logger::error('Failed to send chat message', [
                 'offer_id' => $offerId,
@@ -913,7 +902,7 @@ class DriverController
 
         try {
             $pdo = Database::getConnection();
-            
+
             // Check if offer belongs to the driver
             $stmt = $pdo->prepare("
                 SELECT id, load_id 
@@ -956,9 +945,9 @@ class DriverController
                     'message_text' => $message['message_text'],
                     'message_type' => $message['message_type'],
                     'price_amount' => $message['price_amount'] ? (float)$message['price_amount'] : null,
-                    'created_at' => $message['created_at'],
+                    'created_at' => $message['created_at'] ? \App\Core\TimeService::convertUtcToAppTz(new \DateTimeImmutable($message['created_at'], new \DateTimeZone('UTC')))->format(DATE_ATOM) : null,
                     'is_read' => (bool)$message['is_read'],
-                    'read_at' => $message['read_at']
+                    'read_at' => $message['read_at'] ? \App\Core\TimeService::convertUtcToAppTz(new \DateTimeImmutable($message['read_at'], new \DateTimeZone('UTC')))->format(DATE_ATOM) : null
                 ];
             }
 
@@ -967,7 +956,6 @@ class DriverController
                 'messages' => $result,
                 'total' => count($result)
             ]);
-
         } catch (Exception $e) {
             Logger::error('Failed to get chat messages', [
                 'offer_id' => $offerId,
@@ -977,4 +965,4 @@ class DriverController
             self::sendResponse(['success' => false, 'message' => 'Failed to get messages'], 500);
         }
     }
-} 
+}

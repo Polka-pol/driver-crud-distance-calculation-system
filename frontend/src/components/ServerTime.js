@@ -1,27 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { getCurrentEDT, formatEDTTime } from '../utils/timeUtils';
+import React, { useEffect, useState } from 'react';
+import { formatTimeInAppTZ } from '../utils/timeUtils';
 
-const ServerTime = ({ serverTimeOffset, isSyncing = false }) => {
+const ServerTime = ({ serverTimeOffset = 0, isSyncing = false }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
-  const getServerTime = () => {
-    // Get current time in EDT with server offset
-    const edtTime = getCurrentEDT(serverTimeOffset);
-    return formatEDTTime(edtTime);
-  };
+  const display = formatTimeInAppTZ(new Date(currentTime.getTime() + (serverTimeOffset || 0)));
 
   return (
-    <span className={`server-time ${isSyncing ? 'syncing' : ''}`}>
-      {isSyncing ? '⏳' : `EDT ${getServerTime()}`}
-    </span>
+    <span className={`server-time ${isSyncing ? 'syncing' : ''}`}>{isSyncing ? '⏳' : display}</span>
   );
 };
 

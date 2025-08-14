@@ -1,4 +1,5 @@
 /* ===== UNIFIED ADMIN PANEL STYLES ===== */
+
 /* Based on SessionManagement.css with unified styling for all admin components */
 
 /* ===== CONTAINER STYLES ===== */
@@ -6,9 +7,9 @@
     padding: 20px;
     max-width: 1400px;
     margin: 0 auto;
-    background-color: #ffffff;
+    background-color: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
 }
 
 /* ===== HEADER STYLES ===== */
@@ -81,7 +82,7 @@
 
 .admin-stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
 }
 
 .admin-stat-card.primary {
@@ -110,7 +111,7 @@
 }
 
 .admin-stat-card h4 {
-    margin: 0 0 8px 0;
+    margin: 0 0 8px;
     font-size: 14px;
     font-weight: 600;
     color: #6b7280;
@@ -264,7 +265,7 @@
 .admin-table .session-duration,
 .admin-table .contact,
 .admin-table .admin-cell-monospace {
-    font-family: 'Courier New', monospace;
+    font-family: Courier New, monospace;
     font-size: 13px;
 }
 
@@ -384,7 +385,7 @@
 }
 
 .admin-chart-container h4 {
-    margin: 0 0 15px 0;
+    margin: 0 0 15px;
     font-size: 16px;
     font-weight: 600;
     color: #374151;
@@ -411,7 +412,7 @@
 
 .admin-activity-item:hover {
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
 }
 
 .admin-activity-name {
@@ -449,14 +450,14 @@
 .edit-user-btn {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: white;
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 2px 4px rgb(59 130 246 / 20%);
 }
 
 .admin-action-btn.edit:hover,
 .edit-user-btn:hover {
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 8px rgb(59 130 246 / 30%);
 }
 
 .admin-action-btn.delete,
@@ -464,7 +465,7 @@
 .logout-user-btn {
     background: linear-gradient(135deg, #ef4444, #dc2626);
     color: white;
-    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+    box-shadow: 0 2px 4px rgb(239 68 68 / 20%);
 }
 
 .admin-action-btn.delete:hover:not(:disabled),
@@ -472,7 +473,7 @@
 .logout-user-btn:hover:not(:disabled) {
     background: linear-gradient(135deg, #dc2626, #b91c1c);
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+    box-shadow: 0 4px 8px rgb(239 68 68 / 30%);
 }
 
 .admin-action-btn:disabled,
@@ -541,7 +542,7 @@
 
 /* ===== SPECIAL CELLS ===== */
 .admin-cell-monospace {
-    font-family: 'Courier New', monospace;
+    font-family: Courier New, monospace;
     font-size: 13px;
 }
 
@@ -561,13 +562,13 @@
 }
 
 /* ===== RESPONSIVE DESIGN ===== */
-@media (max-width: 1024px) {
+@media (width <= 1024px) {
     .admin-charts-grid {
         grid-template-columns: 1fr;
     }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .admin-container {
         padding: 15px;
     }
@@ -648,9 +649,7 @@
         -webkit-overflow-scrolling: touch;
     }
     
-    .admin-table {
-        min-width: 600px;
-    }
+    /* Дублікат видалено - використовується стиль з рядка 598 */
 
     .admin-filter-controls {
         flex-direction: column;
@@ -664,7 +663,7 @@
     }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
     .admin-container {
         padding: 10px;
     }

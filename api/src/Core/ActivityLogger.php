@@ -28,18 +28,17 @@ class ActivityLogger
         }
 
         $sql = "INSERT INTO activity_logs (user_id, action, details, created_at) VALUES (:user_id, :action, :details, :created_at)";
-        
+
         try {
             $pdo = Database::getConnection();
             $stmt = $pdo->prepare($sql);
-            
+
             $stmt->execute([
                 ':user_id' => $user->id,
                 ':action' => $action,
                 ':details' => json_encode($details),
-                ':created_at' => EDTTimeConverter::getCurrentEDT()
+                ':created_at' => TimeService::nowUtc()->format('Y-m-d H:i:s')
             ]);
-
         } catch (PDOException $e) {
             // Log the failure to the main application logger.
             // We don't want to create an infinite loop if the DB is down.
@@ -49,4 +48,4 @@ class ActivityLogger
             ]);
         }
     }
-} 
+}

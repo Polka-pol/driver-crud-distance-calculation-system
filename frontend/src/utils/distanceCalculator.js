@@ -36,6 +36,20 @@ export async function calculateDistancesForDrivers(destination, onDistancesUpdat
         return;
     }
 
+    // Frontend guard: require either distance.process or distance.batch
+    try {
+        const resp = await apiClient(`${API_BASE_URL}/me/permissions`);
+        const data = await resp.json();
+        const perms = Array.isArray(data.data) ? data.data : [];
+        const canProcess = perms.includes('distance.process') || perms.includes('distance.batch');
+        if (!canProcess) {
+            throw new Error('You do not have permission to calculate distances.');
+        }
+    } catch (e) {
+        if (onCalculationEnd) onCalculationEnd();
+        throw e;
+    }
+
     const totalStartTime = performance.now();
 
     try {

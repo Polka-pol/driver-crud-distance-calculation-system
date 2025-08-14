@@ -17,7 +17,7 @@
 
 .phone-numbers-textarea {
     white-space: pre-wrap;
-    word-wrap: break-word;
+    overflow-wrap: break-word;
     font-family: monospace;
     font-size: 14px;
     line-height: 1.6;
@@ -89,13 +89,13 @@
     font-weight: 600;
     transition: all 0.2s ease;
     height: 40px;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 2px 4px rgb(37 99 235 / 20%);
 }
 
 .copy-btn:hover {
     background: linear-gradient(135deg, #1d4ed8, #1e40af);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 4px 12px rgb(37 99 235 / 30%);
 }
 
 .copy-btn:disabled {
@@ -105,14 +105,14 @@
     box-shadow: none;
 }
 
-.copy-btn:not(:disabled):not(:hover) {
+.copy-btn:not(:disabled, :hover) {
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
 }
 
 .copy-btn:not(:disabled):hover {
     background: linear-gradient(135deg, #1d4ed8, #1e40af);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 4px 12px rgb(37 99 235 / 30%);
 }
 
 .modal-footer {
@@ -123,7 +123,7 @@
 }
 
 /* Responsive design */
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .copy-numbers-modal {
         width: 95%;
         margin: 10px;

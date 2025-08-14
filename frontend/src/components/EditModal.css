@@ -15,7 +15,7 @@
   max-width: 900px;
   max-height: 95vh;
   overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 12%);
   position: relative;
 }
 
@@ -60,7 +60,7 @@
   border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 0.8rem;
-  background-color: #ffffff;
+  background-color: #fff;
   color: #374151;
   min-width: 180px;
   cursor: pointer;
@@ -70,7 +70,7 @@
 .dispatcher-select:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 10%);
 }
 
 .dispatcher-select:hover:not(:focus) {
@@ -150,7 +150,7 @@
 .edit-input:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 10%);
   background-color: white;
 }
 
@@ -171,7 +171,7 @@
   background-color: #f9fafb;
   transition: all 0.2s ease;
   overflow-wrap: break-word;
-  word-break: break-word;
+  word-break: break-all;
   box-sizing: border-box;
   font-family: inherit;
 }
@@ -179,7 +179,7 @@
 .edit-textarea:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 10%);
   background-color: white;
 }
 
@@ -201,7 +201,7 @@
 .date-picker-container {
   display: flex;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .now-btn {
@@ -213,15 +213,15 @@
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s ease;
-  height: 40px;
+  height: 44px;
   white-space: nowrap;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 4px rgb(59 130 246 / 20%);
 }
 
 .now-btn:hover {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgb(59 130 246 / 30%);
 }
 
 .edit-form-actions {
@@ -249,13 +249,13 @@
   font-weight: 600;
   transition: all 0.2s ease;
   height: 40px;
-  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+  box-shadow: 0 2px 4px rgb(239 68 68 / 20%);
 }
 
 .delete-btn:hover {
   background: linear-gradient(135deg, #dc2626, #b91c1c);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 12px rgb(239 68 68 / 30%);
 }
 
 .cancel-btn {
@@ -286,13 +286,13 @@
   font-weight: 600;
   transition: all 0.2s ease;
   height: 40px;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 2px 4px rgb(16 185 129 / 20%);
 }
 
 .save-btn:hover {
   background: linear-gradient(135deg, #059669, #047857);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgb(16 185 129 / 30%);
 }
 
 .toggle-additional-btn {
@@ -326,23 +326,23 @@
   font-weight: 600;
   transition: all 0.2s ease;
   height: 40px;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 4px rgb(59 130 246 / 20%);
 }
 
 .edit-modal-content .edit-form-actions .btn.btn-primary:hover {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgb(59 130 246 / 30%);
 }
 
 /* Responsive styles */
-@media (max-width: 1024px) {
+@media (width <= 1024px) {
   .modal-overlay .edit-modal-content {
     max-width: 800px;
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .modal-overlay .edit-modal-content {
     max-width: 95vw;
     margin: 10px;
@@ -403,7 +403,7 @@
   }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .modal-overlay .edit-modal-content {
     padding: 16px;
   }

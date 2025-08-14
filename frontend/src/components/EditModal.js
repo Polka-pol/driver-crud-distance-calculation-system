@@ -1,37 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { format } from "date-fns";
-import { FaRegCalendarAlt } from "react-icons/fa";
 import AddressSearchBar from './AddressSearchBar';
 import { useModalScrollLock } from '../utils/modalScrollLock';
 import UpdateStatusModal from './UpdateStatusModal';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
-import { formatEDTTimeForModal, getCurrentEDT } from '../utils/timeUtils';
+import {
+  formatEDTTimeForModal,
+  getCurrentTimeInAppTZ,
+  parseAppTzDateTimeToEpochMs,
+  formatDateTimeInAppTZ,
+} from '../utils/timeUtils';
 import './EditModal.css';
+import { usePermissions } from '../context/PermissionsContext';
 
 const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
   <div style={{ position: "relative", width: "100%" }}>
     <input
       className="edit-input"
-      style={{ paddingRight: "36px" }}
       onClick={onClick}
       value={value}
       readOnly
       ref={ref}
       placeholder="Select date"
-    />
-    <FaRegCalendarAlt
-      style={{
-        position: "absolute",
-        right: "12px",
-        top: "50%",
-        transform: "translateY(-50%)",
-        color: "#2980b9",
-        pointerEvents: "none"
-      }}
-      size={20}
     />
   </div>
 ));
@@ -43,8 +35,10 @@ const EditModal = ({
   onClose, 
   onSave, 
   onDelete, 
-  onSetNoUpdate
+  onSetNoUpdate,
+  serverTimeOffset = 0
 }) => {
+  const { has } = usePermissions();
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
   const [showNoUpdateModal, setShowNoUpdateModal] = useState(false);
   const [dispatchers, setDispatchers] = useState([]);
@@ -120,14 +114,7 @@ const EditModal = ({
   };
 
   // Check if user has permission to set no update
-  const canSetNoUpdate = () => {
-    // Any dispatcher can set no update (removed assigned dispatcher restriction)
-    if (userRole === 'admin' || userRole === 'manager' || userRole === 'dispatcher') {
-      return true;
-    }
-    
-    return false;
-  };
+  const canSetNoUpdate = () => has('driver.updates.modify');
 
   if (!editedTruck || !form) return null;
 
@@ -163,10 +150,13 @@ const EditModal = ({
             <div className="last-modified-compact">
               <div className="modified-by">{form.updated_by || 'Unknown User'}</div>
               <div className="modified-date">
-                {form.updated_at 
-                  ? formatEDTTimeForModal(form.updated_at)
-                  : 'Unknown Date'
-                }
+                {(() => {
+                  if (!form.updated_at) return 'Unknown Date';
+                  const ms = parseAppTzDateTimeToEpochMs(form.updated_at);
+                  return Number.isFinite(ms)
+                    ? formatEDTTimeForModal(new Date(ms))
+                    : formatEDTTimeForModal(form.updated_at);
+                })()}
               </div>
             </div>
           )}
@@ -230,8 +220,13 @@ const EditModal = ({
             <label>When will be there</label>
             <div className="date-picker-container">
               <DatePicker
-                selected={form.arrival_time ? new Date(form.arrival_time) : null}
-                onChange={date => setForm(prev => ({ ...prev, arrival_time: date ? format(date, "yyyy-MM-dd HH:mm") : '' }))}
+                selected={form.arrival_time ? (function(){
+                  const str = String(form.arrival_time);
+                  const iso = str.includes('T') ? str + ':00' : str.replace(' ', 'T') + ':00';
+                  const ms = parseAppTzDateTimeToEpochMs(iso);
+                  return Number.isFinite(ms) ? new Date(ms) : null;
+                })() : null}
+                onChange={date => setForm(prev => ({ ...prev, arrival_time: date ? formatDateTimeInAppTZ(date) : '' }))}
                 showTimeSelect
                 dateFormat="Pp"
                 customInput={<CustomDateInput />}
@@ -240,14 +235,12 @@ const EditModal = ({
               <button 
                 className="now-btn"
                 onClick={() => {
-                  const nowEDT = getCurrentEDT();
-                  const year = nowEDT.getFullYear();
-                  const month = String(nowEDT.getMonth() + 1).padStart(2, '0');
-                  const day = String(nowEDT.getDate()).padStart(2, '0');
-                  const hours = String(nowEDT.getHours()).padStart(2, '0');
-                  const minutes = String(nowEDT.getMinutes()).padStart(2, '0');
-                  const edtDate = `${year}-${month}-${day} ${hours}:${minutes}`;
-                  setForm(prev => ({ ...prev, arrival_time: edtDate, status: 'Available' }));
+                  const now = getCurrentTimeInAppTZ(serverTimeOffset);
+                  setForm((prev) => ({
+                    ...prev,
+                    arrival_time: formatDateTimeInAppTZ(now),
+                    status: 'Available',
+                  }));
                 }}
               >
                 NOW
@@ -340,14 +333,14 @@ const EditModal = ({
           {/* Action Buttons */}
           <div className="edit-form-actions">
             <div className="left-actions">
-              <button onClick={() => onDelete(form.id)} className="delete-btn">Delete</button>
+              <button onClick={() => onDelete(form.id)} className="delete-btn" disabled={!has('trucks.delete')}>Delete</button>
               {canSetNoUpdate() && (
                 <button onClick={openNoUpdateModal} className="btn btn-primary">Set No Update</button>
               )}
             </div>
             <div className="right-actions">
               <button onClick={onClose} className="cancel-btn">Cancel</button>
-              <button onClick={() => onSave(form)} className="save-btn">Save Changes</button>
+              <button onClick={() => onSave(form)} className="save-btn" disabled={!has('trucks.update')}>Save Changes</button>
             </div>
           </div>
         </div>
