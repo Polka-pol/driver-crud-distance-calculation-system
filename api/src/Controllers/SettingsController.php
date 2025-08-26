@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Core\Auth;
+use App\Core\HybridAuth;
 use App\Core\SettingsService;
 use App\Core\TimeService;
 use App\Core\ActivityLogger;
@@ -25,7 +25,7 @@ class SettingsController
 
     public static function updateTimezone()
     {
-        Auth::protect(['admin']);
+        HybridAuth::protect(['admin']);
 
         $data = json_decode(file_get_contents('php://input'), true) ?: [];
         $tz = $data['timezone'] ?? '';
@@ -39,12 +39,12 @@ class SettingsController
             self::sendResponse(['success' => false, 'message' => 'Invalid timezone'], 400);
             return;
         }
-        $user = Auth::getCurrentUser();
+        $user = HybridAuth::getCurrentUser();
         ActivityLogger::log('app_timezone_changed', [
             'previous_timezone' => $previousTz,
             'new_timezone' => $tz,
             'changed_by_user_id' => $user->id ?? null,
-            'changed_by_username' => $user->username ?? ($user->fullName ?? null),
+            'changed_by_username' => \App\Core\UserService::getDisplayName($user),
         ]);
         self::sendResponse(['success' => true, 'timezone' => $tz]);
     }

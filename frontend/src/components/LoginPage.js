@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { login } from '../utils/auth';
+import { useAuth } from '../context/HybridAuthContext';
 import './LoginPage.css';
 
-const LoginPage = ({ onLoginSuccess }) => {
-    const [username, setUsername] = useState('');
+const LoginPage = () => {
+    const { signIn, loading, error: authError } = useAuth();
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +20,7 @@ const LoginPage = ({ onLoginSuccess }) => {
                     });
                     
                     if (credential && credential.type === 'password') {
-                        setUsername(credential.id);
+                        setEmail(credential.id);
                         setPassword(credential.password);
                     }
                 } catch (error) {
@@ -37,16 +38,20 @@ const LoginPage = ({ onLoginSuccess }) => {
         setError('');
         setIsLoading(true);
         try {
-            const user = await login(username, password);
+            const result = await signIn(email, password);
+            
+            if (result.error) {
+                throw new Error(result.error.message || 'Login failed');
+            }
             
             // Explicitly tell the browser about successful login
-            if (window.PasswordCredential && navigator.credentials) {
+            if (window.PasswordCredential && navigator.credentials && result.data?.user) {
                 try {
                     // eslint-disable-next-line no-undef
                     const credential = new PasswordCredential({
-                        id: username,
+                        id: email,
                         password: password,
-                        name: user.fullName || username
+                        name: result.data.user.user_metadata?.full_name || result.data.user.fullName || email
                     });
                     await navigator.credentials.store(credential);
                 } catch (credError) {
@@ -55,7 +60,7 @@ const LoginPage = ({ onLoginSuccess }) => {
                 }
             }
             
-            onLoginSuccess(user);
+            // No need to call onLoginSuccess - HybridAuthContext handles state
         } catch (err) {
             setError(err.message);
         } finally {
@@ -69,15 +74,16 @@ const LoginPage = ({ onLoginSuccess }) => {
                 <h2>Connex Transport</h2>
                 <form onSubmit={handleSubmit} name="loginForm" id="loginForm">
                     <div className="form-group">
-                        <label htmlFor="username">Username</label>
+                        <label htmlFor="email">Email</label>
                         <input
-                            type="text"
-                            id="username"
-                            name="username"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
+                            type="email"
+                            id="email"
+                            name="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             required
-                            autoComplete="username"
+                            autoComplete="email"
+                            placeholder="Email"
                         />
                     </div>
                     <div className="form-group">
@@ -92,9 +98,9 @@ const LoginPage = ({ onLoginSuccess }) => {
                             autoComplete="current-password"
                         />
                     </div>
-                    {error && <p className="login-error-message">{error}</p>}
-                    <button type="submit" className="login-btn" disabled={isLoading}>
-                        {isLoading ? 'Logging in...' : 'Login'}
+                    {(error || authError) && <p className="login-error-message">{error || authError}</p>}
+                    <button type="submit" className="login-btn" disabled={isLoading || loading}>
+                        {(isLoading || loading) ? 'Logging in...' : 'Login'}
                     </button>
                 </form>
             </div>

@@ -5,7 +5,7 @@ namespace App\Controllers;
 use App\Core\Database;
 use App\Core\Logger;
 use App\Core\ActivityLogger;
-use App\Core\Auth;
+use App\Core\HybridAuth;
 use App\Core\EDTTimeConverter;
 use App\Services\GeocoderService;
 use PDO;
@@ -31,6 +31,10 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
+            
+            // Auto-cleanup expired holds before fetching data
+            self::autoCleanupExpiredHolds($pdo);
+            
             $stmt = $pdo->query(
                 'SELECT 
                     TruckNumber, rate, Status, WhenWillBeThere, 
@@ -44,8 +48,8 @@ class TruckController
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $mappedResults = array_map(function ($row) {
-                // Get current user ID from JWT token
-                $currentUser = Auth::getCurrentUser();
+                // Get current user ID from session (HybridAuth)
+                $currentUser = HybridAuth::getCurrentUser();
                 $currentUserId = $currentUser ? $currentUser->id : null;
 
                 // Check if phone numbers should be hidden
@@ -124,12 +128,10 @@ class TruckController
 
             // Get user info from JWT token
             $currentUser = 'Unknown User';
-            $userData = Auth::getCurrentUser();
+            $userData = HybridAuth::getCurrentUser();
 
-
-
-            if ($userData && isset($userData->fullName)) {
-                $currentUser = $userData->fullName;
+            if ($userData) {
+                $currentUser = \App\Core\UserService::getDisplayName($userData);
             }
 
             // Build dynamic update query based on provided fields
@@ -425,6 +427,9 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
+            
+            // Auto-cleanup expired holds before fetching data
+            self::autoCleanupExpiredHolds($pdo);
 
             $sql = 'SELECT 
                         t.TruckNumber, t.Status, t.DriverName, t.CellPhone, 
@@ -442,8 +447,8 @@ class TruckController
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $mappedResults = array_map(function ($row) {
-                // Get current user ID from JWT token
-                $currentUser = Auth::getCurrentUser();
+                // Get current user ID from session (HybridAuth)
+                $currentUser = HybridAuth::getCurrentUser();
                 $currentUserId = $currentUser ? $currentUser->id : null;
 
                 // Check if phone numbers should be hidden
@@ -508,12 +513,12 @@ class TruckController
         try {
             $pdo = Database::getConnection();
 
-            // Get user info from JWT token
+            // Get user info from HybridAuth
             $currentUser = 'Unknown User';
-            $userData = Auth::getCurrentUser();
+            $userData = HybridAuth::getCurrentUser();
 
-            if ($userData && isset($userData->fullName)) {
-                $currentUser = $userData->fullName;
+            if ($userData) {
+                $currentUser = \App\Core\UserService::getDisplayName($userData);
             }
 
             // Prepare base parameters
@@ -639,20 +644,32 @@ class TruckController
     private static function logExtendedChange($pdo, $truckId, $truckNumber, $changes, $allCurrentValues, $userData)
     {
         try {
+            // Determine proper user identifiers
+            $changedByMysqlId = \App\Core\UserService::getMysqlId($userData);
+            $changedBySupabaseId = \App\Core\UserService::getSupabaseId($userData);
+
+            // If Supabase user with no MySQL ID, ensure one exists for consistent logging
+            if ($changedByMysqlId === null && $changedBySupabaseId) {
+                $mysqlUser = \App\Core\UserService::ensureMysqlUser($userData);
+                if ($mysqlUser && isset($mysqlUser['id'])) {
+                    $changedByMysqlId = (int)$mysqlUser['id'];
+                }
+            }
+
             $sql = "INSERT INTO truck_location_history (
                         truck_id, truck_number, 
                         old_location, new_location,
                         old_whenwillbethere, new_whenwillbethere,
                         old_status, new_status,
                         changed_fields,
-                        changed_by_user_id, changed_by_username, created_at
+                        changed_by_user_id, supabase_changed_by_id, changed_by_username, created_at
                     ) VALUES (
                         :truck_id, :truck_number,
                         :old_location, :new_location,
                         :old_whenwillbethere, :new_whenwillbethere,
                         :old_status, :new_status,
                         :changed_fields,
-                        :changed_by_user_id, :changed_by_username, :created_at
+                        :changed_by_user_id, :supabase_changed_by_id, :changed_by_username, :created_at
                     )";
 
             $stmt = $pdo->prepare($sql);
@@ -667,33 +684,30 @@ class TruckController
                 ':old_status' => $changes['status']['old'] ?? $allCurrentValues['status'],
                 ':new_status' => $changes['status']['new'] ?? $allCurrentValues['status'],
                 ':changed_fields' => json_encode(array_keys($changes)),
-                ':changed_by_user_id' => $userData ? ($userData->id ?? null) : null,
-                ':changed_by_username' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User',
+                // Only store numeric ID in changed_by_user_id; UUID goes into supabase_changed_by_id
+                ':changed_by_user_id' => $changedByMysqlId,
+                ':supabase_changed_by_id' => $changedBySupabaseId,
+                ':changed_by_username' => $userData ? \App\Core\UserService::getDisplayName($userData) : 'Unknown User',
                 ':created_at' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s')
             ]);
 
-            // Also log to activity_logs for dashboard
-            ActivityLogger::log('truck_extended_change', [
-                'truck_id' => $truckId,
-                'truck_number' => $truckNumber,
-                'changes' => $changes,
-                'changed_fields' => array_keys($changes)
-            ]);
+            // Extended change details are already stored in truck_location_history table
+            // No need for duplicate logging in activity_logs
 
             Logger::info('Extended change logged successfully', [
                 'truck_id' => $truckId,
                 'truck_number' => $truckNumber,
                 'changes' => $changes,
                 'changed_fields' => array_keys($changes),
-                'changed_by' => $userData ? ($userData->fullName ?? $userData->username ?? 'Unknown User') : 'Unknown User'
+                'changed_by' => $userData ? \App\Core\UserService::getDisplayName($userData) : 'Unknown User'
             ]);
         } catch (PDOException $e) {
             Logger::error('Failed to log location change', [
                 'error' => $e->getMessage(),
                 'truck_id' => $truckId,
-                'old_location' => $oldLocation,
-                'new_location' => $newLocation,
-                'user_data' => $userData
+                'changes' => $changes,
+                'all_current_values' => $allCurrentValues,
+                'user_id' => $userData->id ?? null
             ]);
         }
     }
@@ -725,7 +739,7 @@ class TruckController
                         old_whenwillbethere, new_whenwillbethere,
                         old_status, new_status,
                         changed_fields,
-                        changed_by_user_id, changed_by_username, created_at
+                        changed_by_user_id, supabase_changed_by_id, changed_by_username, created_at
                     FROM truck_location_history 
                     WHERE truck_id = :truck_id 
                     ORDER BY created_at DESC 
@@ -822,79 +836,95 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
+            
+            // Start transaction for better race condition protection
+            $pdo->beginTransaction();
 
-            // Check if truck exists
-            $truckStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID");
-            $truckStmt->execute(['ID' => $truckId]);
-            $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
+            try {
+                // Auto-cleanup expired holds first
+                self::autoCleanupExpiredHolds($pdo);
 
-            if (!$truckData) {
-                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
-                return;
-            }
+                // Check if truck exists
+                $truckStmt = $pdo->prepare("SELECT TruckNumber FROM Trucks WHERE ID = :ID FOR UPDATE");
+                $truckStmt->execute(['ID' => $truckId]);
+                $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
 
-            $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
+                if (!$truckData) {
+                    $pdo->rollBack();
+                    self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                    return;
+                }
 
-            // Check if truck is already on hold
-            $holdStmt = $pdo->prepare("SELECT hold_status, hold_dispatcher_id, hold_dispatcher_name FROM Trucks WHERE ID = :ID");
-            $holdStmt->execute(['ID' => $truckId]);
-            $holdData = $holdStmt->fetch(PDO::FETCH_ASSOC);
+                $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
 
-            if ($holdData['hold_status'] === 'active') {
-                self::sendResponse([
-                    'success' => false,
-                    'message' => 'Truck is already on hold.',
-                    'hold_info' => [
-                        'dispatcher_name' => $holdData['hold_dispatcher_name'],
-                        'dispatcher_id' => $holdData['hold_dispatcher_id']
-                    ]
-                ], 409);
-                return;
-            }
-
-            // Place hold with optimistic locking to prevent race conditions
-            $updateStmt = $pdo->prepare("
-                UPDATE Trucks 
-                SET hold_status = 'active', 
-                    hold_started_at = :edt_time, 
-                    hold_dispatcher_id = :dispatcher_id, 
-                    hold_dispatcher_name = :dispatcher_name
-                WHERE ID = :truck_id AND (hold_status IS NULL OR hold_status != 'active')
-            ");
-
-            $updateStmt->execute([
-                'edt_time' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'),
-                'dispatcher_id' => $dispatcherId,
-                'dispatcher_name' => $dispatcherName,
-                'truck_id' => $truckId
-            ]);
-
-            // Check if any rows were actually updated
-            if ($updateStmt->rowCount() === 0) {
-                // Hold was already placed by another request
-                $holdStmt = $pdo->prepare("SELECT hold_dispatcher_name FROM Trucks WHERE ID = :ID");
+                // Check if truck is already on hold (with row lock)
+                $holdStmt = $pdo->prepare("SELECT hold_status, hold_dispatcher_id, hold_dispatcher_name FROM Trucks WHERE ID = :ID FOR UPDATE");
                 $holdStmt->execute(['ID' => $truckId]);
                 $holdData = $holdStmt->fetch(PDO::FETCH_ASSOC);
 
-                self::sendResponse([
-                    'success' => false,
-                    'message' => 'Truck is already on hold.',
-                    'hold_info' => [
-                        'dispatcher_name' => $holdData['hold_dispatcher_name'] ?? 'Unknown',
-                        'dispatcher_id' => $dispatcherId
-                    ]
-                ], 409);
-                return;
+                if ($holdData['hold_status'] === 'active') {
+                    $pdo->rollBack();
+                    self::sendResponse([
+                        'success' => false,
+                        'message' => 'Truck is already on hold.',
+                        'hold_info' => [
+                            'dispatcher_name' => $holdData['hold_dispatcher_name'],
+                            'dispatcher_id' => $holdData['hold_dispatcher_id']
+                        ]
+                    ], 409);
+                    return;
+                }
+
+                // Place hold - now using proper parameter name
+                $updateStmt = $pdo->prepare("
+                    UPDATE Trucks 
+                    SET hold_status = 'active', 
+                        hold_started_at = :hold_started_at, 
+                        hold_dispatcher_id = :dispatcher_id, 
+                        hold_dispatcher_name = :dispatcher_name
+                    WHERE ID = :truck_id AND (hold_status IS NULL OR hold_status != 'active')
+                ");
+
+                $updateStmt->execute([
+                    'hold_started_at' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'),
+                    'dispatcher_id' => $dispatcherId,
+                    'dispatcher_name' => $dispatcherName,
+                    'truck_id' => $truckId
+                ]);
+
+                // Check if any rows were actually updated
+                if ($updateStmt->rowCount() === 0) {
+                    // Hold was already placed by another request
+                    $pdo->rollBack();
+                    $holdStmt = $pdo->prepare("SELECT hold_dispatcher_name FROM Trucks WHERE ID = :ID");
+                    $holdStmt->execute(['ID' => $truckId]);
+                    $holdData = $holdStmt->fetch(PDO::FETCH_ASSOC);
+
+                    self::sendResponse([
+                        'success' => false,
+                        'message' => 'Truck is already on hold.',
+                        'hold_info' => [
+                            'dispatcher_name' => $holdData['hold_dispatcher_name'] ?? 'Unknown',
+                            'dispatcher_id' => $dispatcherId
+                        ]
+                    ], 409);
+                    return;
+                }
+
+                ActivityLogger::log('truck_hold_placed', [
+                    'truck_id' => $truckId,
+                    'truck_number' => $truckNumber,
+                    'dispatcher_id' => $dispatcherId,
+                    'dispatcher_name' => $dispatcherName
+                ]);
+
+                $pdo->commit();
+                self::sendResponse(['success' => true, 'message' => 'Hold placed successfully.']);
+                
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                throw $e;
             }
-
-            ActivityLogger::log('truck_hold_placed', [
-                'truck_id' => $truckId,
-                'truck_number' => $truckNumber,
-                'dispatcher_id' => $dispatcherId,
-                'dispatcher_name' => $dispatcherName
-            ]);
-
-            self::sendResponse(['success' => true, 'message' => 'Hold placed successfully.']);
         } catch (PDOException $e) {
             Logger::error('Failed to place hold', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
             self::sendResponse(['success' => false, 'message' => 'Database error during hold placement.'], 500);
@@ -908,62 +938,79 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
+            
+            // Start transaction for better race condition protection
+            $pdo->beginTransaction();
 
-            // Check if truck exists and get hold info
-            $truckStmt = $pdo->prepare("
-                SELECT TruckNumber, hold_status, hold_dispatcher_id, hold_dispatcher_name 
-                FROM Trucks WHERE ID = :ID
-            ");
-            $truckStmt->execute(['ID' => $truckId]);
-            $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
+            try {
+                // Auto-cleanup expired holds first
+                self::autoCleanupExpiredHolds($pdo);
 
-            if (!$truckData) {
-                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
-                return;
+                // Check if truck exists and get hold info (with row lock)
+                $truckStmt = $pdo->prepare("
+                    SELECT TruckNumber, hold_status, hold_dispatcher_id, hold_dispatcher_name 
+                    FROM Trucks WHERE ID = :ID FOR UPDATE
+                ");
+                $truckStmt->execute(['ID' => $truckId]);
+                $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$truckData) {
+                    $pdo->rollBack();
+                    self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                    return;
+                }
+
+                if ($truckData['hold_status'] !== 'active') {
+                    $pdo->rollBack();
+                    self::sendResponse(['success' => false, 'message' => 'Truck is not on hold.'], 400);
+                    return;
+                }
+
+                // Check if dispatcher can remove the hold
+                if ($truckData['hold_dispatcher_id'] != $dispatcherId) {
+                    $pdo->rollBack();
+                    self::sendResponse(['success' => false, 'message' => 'You can only remove your own holds.'], 403);
+                    return;
+                }
+
+                $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
+
+                // Remove hold
+                $updateStmt = $pdo->prepare("
+                    UPDATE Trucks 
+                    SET hold_status = NULL, 
+                        hold_started_at = NULL, 
+                        hold_dispatcher_id = NULL, 
+                        hold_dispatcher_name = NULL
+                    WHERE ID = :truck_id AND hold_status = 'active'
+                ");
+
+                $updateStmt->execute([
+                    'truck_id' => $truckId
+                ]);
+
+                // Check if any rows were actually updated
+                if ($updateStmt->rowCount() === 0) {
+                    // Hold was already removed by another request
+                    $pdo->rollBack();
+                    self::sendResponse(['success' => false, 'message' => 'Hold was already removed.'], 409);
+                    return;
+                }
+
+                ActivityLogger::log('truck_hold_removed', [
+                    'truck_id' => $truckId,
+                    'truck_number' => $truckNumber,
+                    'dispatcher_id' => $dispatcherId,
+                    'dispatcher_name' => $truckData['hold_dispatcher_name']
+                ]);
+
+                $pdo->commit();
+                self::sendResponse(['success' => true, 'message' => 'Hold removed successfully.']);
+                
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                throw $e;
             }
-
-            if ($truckData['hold_status'] !== 'active') {
-                self::sendResponse(['success' => false, 'message' => 'Truck is not on hold.'], 400);
-                return;
-            }
-
-            // Check if dispatcher can remove the hold
-            if ($truckData['hold_dispatcher_id'] != $dispatcherId) {
-                self::sendResponse(['success' => false, 'message' => 'You can only remove your own holds.'], 403);
-                return;
-            }
-
-            $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
-
-            // Remove hold with optimistic locking to prevent race conditions
-            $updateStmt = $pdo->prepare("
-                UPDATE Trucks 
-                SET hold_status = NULL, 
-                    hold_started_at = NULL, 
-                    hold_dispatcher_id = NULL, 
-                    hold_dispatcher_name = NULL
-                WHERE ID = :truck_id AND hold_status = 'active'
-            ");
-
-            $updateStmt->execute([
-                'truck_id' => $truckId
-            ]);
-
-            // Check if any rows were actually updated
-            if ($updateStmt->rowCount() === 0) {
-                // Hold was already removed by another request
-                self::sendResponse(['success' => false, 'message' => 'Hold was already removed.'], 409);
-                return;
-            }
-
-            ActivityLogger::log('truck_hold_removed', [
-                'truck_id' => $truckId,
-                'truck_number' => $truckNumber,
-                'dispatcher_id' => $dispatcherId,
-                'dispatcher_name' => $truckData['hold_dispatcher_name']
-            ]);
-
-            self::sendResponse(['success' => true, 'message' => 'Hold removed successfully.']);
         } catch (PDOException $e) {
             Logger::error('Failed to remove hold', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
             self::sendResponse(['success' => false, 'message' => 'Database error during hold removal.'], 500);
@@ -971,31 +1018,58 @@ class TruckController
     }
 
     /**
-     * Cleanup expired holds (older than 15 minutes)
+     * Cleanup expired holds (older than 15 minutes) - Internal method
      */
-    public static function cleanupExpiredHolds()
+    private static function autoCleanupExpiredHolds($pdo = null)
     {
         try {
-            $pdo = Database::getConnection();
+            $shouldCloseConnection = false;
+            if ($pdo === null) {
+                $pdo = Database::getConnection();
+                $shouldCloseConnection = true;
+            }
 
-            // Find and update expired holds with optimistic locking
+            // Find and clear expired holds (remove completely instead of marking as expired)
             $updateStmt = $pdo->prepare("
                 UPDATE Trucks 
-                SET hold_status = 'expired'
+                SET hold_status = NULL,
+                    hold_started_at = NULL,
+                    hold_dispatcher_id = NULL,
+                    hold_dispatcher_name = NULL
                 WHERE hold_status = 'active' 
-                AND hold_started_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+                AND hold_started_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 15 MINUTE)
             ");
 
             $updateStmt->execute();
             $expiredCount = $updateStmt->rowCount();
 
             if ($expiredCount > 0) {
-                Logger::info('Cleaned up expired holds', ['count' => $expiredCount]);
+                Logger::info('Auto-cleaned up expired holds', ['count' => $expiredCount]);
+                
+                // Log activity for each cleaned up hold
+                ActivityLogger::log('truck_holds_auto_expired', [
+                    'expired_count' => $expiredCount,
+                    'cleanup_time' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s')
+                ]);
             }
 
-            self::sendResponse(['success' => true, 'expired_count' => $expiredCount]);
+            return $expiredCount;
         } catch (PDOException $e) {
-            Logger::error('Failed to cleanup expired holds', ['error' => $e->getMessage()]);
+            Logger::error('Failed to auto-cleanup expired holds', ['error' => $e->getMessage()]);
+            return 0;
+        }
+    }
+
+    /**
+     * Cleanup expired holds (older than 15 minutes) - Public endpoint
+     */
+    public static function cleanupExpiredHolds()
+    {
+        try {
+            $expiredCount = self::autoCleanupExpiredHolds();
+            self::sendResponse(['success' => true, 'expired_count' => $expiredCount]);
+        } catch (Exception $e) {
+            Logger::error('Failed to cleanup expired holds via endpoint', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error during cleanup.'], 500);
         }
     }
@@ -1007,6 +1081,9 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
+            
+            // Auto-cleanup expired holds before fetching data
+            self::autoCleanupExpiredHolds($pdo);
 
             $stmt = $pdo->prepare("
                 SELECT hold_status, hold_started_at, hold_dispatcher_id, hold_dispatcher_name
@@ -1054,9 +1131,12 @@ class TruckController
     {
         try {
             $pdo = Database::getConnection();
+            
+            // Auto-cleanup expired holds before fetching data
+            self::autoCleanupExpiredHolds($pdo);
 
-            // Get current EDT time
-            $edtTime = \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s');
+            // Get current UTC time
+            $currentTime = \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s');
 
             // Get all active holds with remaining time
             $holdsStmt = $pdo->prepare("
@@ -1070,7 +1150,7 @@ class TruckController
             $holdsInfo = [];
             foreach ($activeHolds as $hold) {
                 $startTime = new \DateTime($hold['hold_started_at']);
-                $now = new \DateTimeImmutable($edtTime, new \DateTimeZone('UTC'));
+                $now = new \DateTimeImmutable($currentTime, new \DateTimeZone('UTC'));
                 $elapsed = $now->diff($startTime);
                 $elapsedMinutes = ($elapsed->h * 60) + $elapsed->i;
                 $remainingMinutes = max(0, 15 - $elapsedMinutes);
@@ -1085,7 +1165,7 @@ class TruckController
 
             self::sendResponse([
                 'success' => true,
-                'server_time' => $edtTime,
+                'server_time' => $currentTime,
                 'holds' => $holdsInfo
             ]);
         } catch (PDOException $e) {

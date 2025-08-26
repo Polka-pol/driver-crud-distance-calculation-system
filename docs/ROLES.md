@@ -11,48 +11,24 @@ This document describes how roles and authorization are implemented and enforced
 
 ### Authentication and Tokens
 
-There are two parallel authentication flows that both use JWTs signed with `HS256` and the `JWT_SECRET` from the environment.
-
-- **Staff (admin/manager/dispatcher) login**: `POST /api/login`
-  - Issues a JWT with payload data: `{ id, username, role, fullName }` and 7-day expiry.
-  - The token is used for all web frontend API calls.
-
-- **Driver login**: `POST /api/driver/login`
-  - Issues a JWT for the driver app with payload data that includes the `role: "driver"` and driver identity details.
-  - Driver-only endpoints validate that the token’s role is `driver`.
-
-JWT structure (staff example):
-
-```json
-{
-  "iat": 1730000000,
-  "exp": 1730604800,
-  "data": {
-    "id": 1,
-    "username": "user@example.com",
-    "role": "dispatcher",
-    "fullName": "John Doe"
-  }
-}
-```
+Backend now enforces Supabase authentication (JWT) for staff/admin endpoints via `HybridAuth`. Driver endpoints continue to use their driver-specific token checks in controllers.
 
 ### Backend Enforcement (PHP API)
 
-- Core helper: `App\Core\Auth::protect(array $allowedRoles = [])`
-  - Validates the Authorization Bearer token.
+- Core helper: `App\Core\HybridAuth::protect(array $allowedRoles = [])`
+  - Validates the Authorization Bearer token using Supabase JWT.
   - If `$allowedRoles` is non-empty, ensures the user’s role is in the list, otherwise responds with 403.
-  - If `$allowedRoles` is empty, it only checks that the token is valid (authenticated user).
-  - Returns the decoded user data (`$decodedToken->data`) on success.
+  - Returns the decoded user object on success.
 
-- Current user convenience: `App\Core\Auth::getCurrentUser()`
-  - Returns the token’s `data` object or `null` if not authenticated.
+- Current user convenience: `App\Core\HybridAuth::getCurrentUser()`
+  - Returns the current Supabase-authenticated user object or `null`.
 
 - Driver token validation (driver-only endpoints):
   - Controllers like `DriverController` and `SearchController` implement `getDriverFromToken()` which decodes the JWT and explicitly enforces `role === 'driver'`.
 
 #### Route-level role protection
 
-Most enforcement happens centrally in `api/index.php` via `Auth::protect([...])` before dispatching to controllers. Highlights:
+Most enforcement happens centrally in `api/index.php` via `HybridAuth::protect([...])` before dispatching to controllers. Highlights:
 
 - Trucks: `GET /api/trucks`, `PUT/DELETE /api/trucks/{id}`, `POST /api/trucks/update|create|delete`, map and location history endpoints
   - Allowed roles: `dispatcher`, `manager`, `admin`.
@@ -90,11 +66,8 @@ While most checks are applied in the router, some controller methods consult the
 
 ### Frontend (React Web)
 
-- Auth utilities store and read JWT + user in `localStorage`:
-  - `login()` saves `token` and `user` (includes `role`).
-  - `getToken()`, `getCurrentUser()`, and `isAuthenticated()` expose state.
-
-- API client automatically attaches `Authorization: Bearer <token>` and logs the user out on `401`.
+- HybridAuthContext handles Supabase session and attaches `Authorization: Bearer <token>` to API calls.
+  - On `401`, the app logs out and prompts re-authentication.
 
 - UI role gating examples:
   - The “Admin” section/button is visible for `manager` and `admin` only.
@@ -159,11 +132,10 @@ if (!$driver) { return; }
 
 If you introduce a new staff role or change permissions:
 
-- Update all route protections in `api/index.php` where `Auth::protect([...])` is called.
-- Update any inline checks in controllers using `Auth::getCurrentUser()`.
+- Update all route protections in `api/index.php` where `HybridAuth::protect([...])` is called.
+- Update any inline checks in controllers using `HybridAuth::getCurrentUser()`.
 - Update frontend UI gating where `user.role` controls visibility.
-- Update Firebase rules if the new role should apply to mobile data access.
-- Ensure the `users.role` column contains the new value and that login tokens include it.
+- Ensure Supabase user metadata/claims carries the role and is validated consistently.
 
 ### Error Handling and Security Notes
 

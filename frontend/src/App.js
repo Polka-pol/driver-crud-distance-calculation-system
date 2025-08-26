@@ -8,37 +8,34 @@ import TruckTable from './components/TruckTable';
 import EditModal from './components/EditModal';
 import NewDriverModal from './components/NewDriverModal';
 import LocationHistoryModal from './components/LocationHistoryModal';
+import SendOfferModal from './components/SendOfferModal';
 import Pagination from './components/Pagination';
 import LoginPage from './components/LoginPage';
 import AdminPage from './components/AdminPage';
 import DispatcherDashboard from './components/DispatcherDashboard';
 import DriverUpdates from './components/DriverUpdates';
 import MapPage from './components/MapPage';
+import OffersPage from './pages/OffersPage';
 import ServerTime from './components/ServerTime';
-import { isAuthenticated, logout, getCurrentUser } from './utils/auth';
+import { useAuth } from './context/HybridAuthContext';
 import { apiClient, fetchMyPermissions } from './utils/apiClient';
 import { API_BASE_URL } from './config';
 import { PermissionsProvider } from './context/PermissionsContext';
+import { HybridAuthProvider } from './context/HybridAuthContext';
 import { getCurrentEDT, setAppTimezone, parseAppTzDateTimeToEpochMs } from './utils/timeUtils';
 import { useModalScrollLock } from './utils/modalScrollLock';
 
-function App() {
-  const [user, setUser] = useState(getCurrentUser());
-  const [isAuth, setIsAuth] = useState(isAuthenticated());
+function AppContent() {
+  const { user, isAuthenticated, loading: authLoading, signOut } = useAuth();
   
   // Additional user validation on component mount
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (currentUser) {
-      // Validate user object has required fields
-      if (!currentUser.id) {
-        console.error('Invalid user object - missing ID:', currentUser);
-        logout();
-        return;
-      }
-      setUser(currentUser);
+    if (user && !user.id) {
+      console.error('Invalid user object - missing ID:', user);
+      signOut();
+      return;
     }
-  }, []);
+  }, [user, signOut]);
   const [view, setView] = useState('main');
   const [trucks, setTrucks] = useState([]);
   const [distances, setDistances] = useState({});
@@ -72,27 +69,14 @@ function App() {
     truckNumber: null,
     driverName: null
   });
+  const [showSendOfferModal, setShowSendOfferModal] = useState(false);
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [isTimeSyncing, setIsTimeSyncing] = useState(false);
   const [permissions, setPermissions] = useState([]);
   const hasPermission = (key) => Array.isArray(permissions) && (permissions.includes('*') || permissions.includes(key));
 
-  const handleLoginSuccess = (userData) => {
-    console.log('Login success - user data:', userData);
-    
-    // Validate user data
-    if (!userData || !userData.id) {
-      console.error('Invalid user data received during login:', userData);
-      alert('Login error: Invalid user data received. Please try again.');
-      return;
-    }
-    
-    setUser(userData);
-    setIsAuth(true);
-  };
-
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await signOut();
   };
 
   const handleManualRefresh = async () => {
@@ -150,7 +134,7 @@ function App() {
 
   useEffect(() => {
     document.title = 'Connex Transport';
-    if (!isAuth) return;
+    if (!isAuthenticated || authLoading) return;
 
     const fetchTrucks = async () => {
       try {
@@ -186,12 +170,10 @@ function App() {
         if (Array.isArray(perms) && perms.length > 0) {
           setPermissions(perms);
         } else {
-          const currentUser = getCurrentUser();
-          setPermissions(currentUser?.role === 'admin' ? ['*'] : []);
+          setPermissions(user?.user_metadata?.role === 'admin' || user?.app_metadata?.role === 'admin' ? ['*'] : []);
         }
       } catch (e) {
-        const currentUser = getCurrentUser();
-        setPermissions(currentUser?.role === 'admin' ? ['*'] : []);
+        setPermissions(user?.user_metadata?.role === 'admin' || user?.app_metadata?.role === 'admin' ? ['*'] : []);
       }
     };
     fetchPerms();
@@ -204,7 +186,7 @@ function App() {
     return () => {
       clearInterval(timeSyncInterval);
     };
-  }, [isAuth]);
+  }, [isAuthenticated, authLoading]);
 
   // Prevent body scroll when comment modal is open
   useModalScrollLock(!!modalComment);
@@ -558,10 +540,9 @@ function App() {
     const userId = user.id || user.userId || user.user_id;
     if (!userId) {
       console.error('User object:', user);
-      console.error('Current user from localStorage:', getCurrentUser());
       alert('User ID not found. Please log in again.');
       // Force logout to refresh authentication
-      logout();
+      await signOut();
       return;
     }
 
@@ -610,10 +591,9 @@ function App() {
     const userId = user.id || user.userId || user.user_id;
     if (!userId) {
       console.error('User object:', user);
-      console.error('Current user from localStorage:', getCurrentUser());
       alert('User ID not found. Please log in again.');
       // Force logout to refresh authentication
-      logout();
+      await signOut();
       return;
     }
 
@@ -799,16 +779,41 @@ function App() {
     }
   };
 
-  // If not authenticated, show the login page
-  if (!isAuth) {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  const handleSendOffer = () => {
+    if (selectedTrucks.length === 0) {
+      alert('Please select drivers first');
+      return;
+    }
+    setShowSendOfferModal(true);
+  };
+
+  const handleOfferSent = (result) => {
+    console.log('Offer sent successfully:', result);
+    setSelectedTrucks([]); // Clear selection
+    alert(`Offer sent successfully to ${result.selectedTruckCount} driver${result.selectedTruckCount !== 1 ? 's' : ''}!`);
+  };
+
+  // If loading or not authenticated, show appropriate screen
+  if (authLoading) {
+    return (
+      <div className="app-bg">
+        <div className="loading-spinner">
+          <div className="spinner"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
   }
 
   // --- Main App Render ---
   return (
-    <div className="app-bg">
-      <div className="container">
-        <PermissionsProvider permissions={permissions}>
+      <div className="app-bg">
+        <div className="container">
+          <PermissionsProvider permissions={permissions}>
         <div className="app-header">
           <div className="header-left">
             <h1>Connex Transport</h1>
@@ -818,8 +823,8 @@ function App() {
               <div className="user-welcome">
                 <ServerTime serverTimeOffset={serverTimeOffset} isSyncing={isTimeSyncing} />
                 <div className="user-info">
-                  <span className="user-name">{user.fullName}</span>
-                  <span className="user-phone">{user.mobile_number || user.mobileNumber}</span>
+                  <span className="user-name">{user.user_metadata?.full_name || user.fullName}</span>
+                  <span className="user-phone">{user.user_metadata?.mobile_number || user.mobile_number || user.mobileNumber}</span>
                 </div>
               </div>
             )}
@@ -836,6 +841,9 @@ function App() {
               </button>
               <button onClick={() => setView('driver-updates')} className="header-btn driver-updates-btn" disabled={!hasPermission('driver.updates.view')}>
                 <span className="btn-text">Driver Updates</span>
+              </button>
+              <button onClick={() => setView('offers')} className="header-btn offers-btn">
+                <span className="btn-text">Offers</span>
               </button>
               {hasPermission('dashboard.analytics.view') && (
                 <button onClick={() => setView('admin')} className="header-btn admin-btn">
@@ -913,6 +921,14 @@ function App() {
                       title="Copy phone numbers of selected trucks"
                     >
                       📋 Copy
+                    </button>
+                    <button 
+                      className="action-btn send-offer-btn"
+                      onClick={handleSendOffer}
+                      title="Send load offer to selected drivers"
+                      disabled={!searchQuery || !isDestinationChosen}
+                    >
+                      📤 Send Offer
                     </button>
                     <button 
                       className="reset-btn" 
@@ -1007,6 +1023,17 @@ function App() {
             driverName={locationHistoryModal.driverName}
           />
         )}
+
+        {showSendOfferModal && (
+          <SendOfferModal
+            isOpen={showSendOfferModal}
+            onClose={() => setShowSendOfferModal(false)}
+            selectedTrucks={selectedTrucks}
+            trucks={trucks}
+            pickupLocation={searchQuery}
+            onOfferSent={handleOfferSent}
+          />
+        )}
           </>
           ) : view === 'admin' ? (
           <AdminPage onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
@@ -1016,10 +1043,21 @@ function App() {
                <DriverUpdates onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
          ) : view === 'map' ? (
           <MapPage onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
+        ) : view === 'offers' ? (
+          <OffersPage onBack={() => setView('main')} />
         ) : null}
         </PermissionsProvider>
+        </div>
       </div>
-    </div>
+  );
+}
+
+// Wrapper component with HybridAuthProvider
+function App() {
+  return (
+    <HybridAuthProvider>
+      <AppContent />
+    </HybridAuthProvider>
   );
 }
 

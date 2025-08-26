@@ -5,8 +5,8 @@ namespace App\Core;
 use App\Core\Database;
 use App\Core\Logger;
 use App\Core\EDTTimeConverter;
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
+use App\Core\HybridAuth;
+use App\Core\UserService;
 use PDO;
 use PDOException;
 use Exception;
@@ -18,16 +18,27 @@ class DriverActivityLogger
      *
      * @param string $action A description of the action (e.g., 'driver_login', 'driver_location_updated').
      * @param array $details Optional JSON serializable data with more context.
-     * @param int|null $driverId Optional driver ID. If not provided, will try to get from JWT token.
+     * @param int|null $driverId Optional driver ID (Truck/Driver record ID). If not provided, no log is written.
      */
     public static function log(string $action, array $details = [], ?int $driverId = null)
     {
-        // Get driver ID from parameter or JWT token
-        $finalDriverId = $driverId ?? self::getDriverIdFromToken();
+        // Resolve driver ID only from provided parameter (no token decoding here)
+        $finalDriverId = $driverId;
 
         if (!$finalDriverId) {
             Logger::warning('DriverActivityLogger called without a valid driver ID or token.', ['action' => $action]);
             return;
+        }
+
+        // Enrich details with authenticated user info (HybridAuth supports Supabase)
+        try {
+            $user = HybridAuth::getCurrentUser();
+            if ($user) {
+                $details['_user'] = UserService::getUserInfo($user);
+            }
+        } catch (Exception $e) {
+            // Non-fatal: continue without user enrichment
+            Logger::warning('Failed to enrich driver activity details with user info', ['error' => $e->getMessage()]);
         }
 
         // Create the driver_activity_logs table if it doesn't exist
@@ -52,44 +63,6 @@ class DriverActivityLogger
                 'action' => $action,
                 'driver_id' => $finalDriverId
             ]);
-        }
-    }
-
-    /**
-     * Get driver ID from JWT token.
-     *
-     * @return int|null The driver ID or null if not found.
-     */
-    private static function getDriverIdFromToken(): ?int
-    {
-        if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
-            return null;
-        }
-
-        $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
-        list($jwt) = sscanf($authHeader, 'Bearer %s');
-
-        if (!$jwt) {
-            return null;
-        }
-
-        try {
-            $secretKey = $_ENV['JWT_SECRET'];
-            if (empty($secretKey)) {
-                throw new Exception("JWT secret key is not configured on the server.");
-            }
-
-            $decodedToken = JWT::decode($jwt, new Key($secretKey, 'HS256'));
-
-            // Check if this is a driver token
-            if (isset($decodedToken->data->role) && $decodedToken->data->role === 'driver') {
-                return $decodedToken->data->id ?? null;
-            }
-
-            return null;
-        } catch (Exception $e) {
-            Logger::warning('JWT validation failed in DriverActivityLogger', ['error' => $e->getMessage()]);
-            return null;
         }
     }
 

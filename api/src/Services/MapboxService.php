@@ -24,11 +24,16 @@ class MapboxService
             'timeout' => 30
         ]);
 
-        $this->mapboxAccessToken = $_ENV['MAPBOX_ACCESS_TOKEN'] ?? '';
+        $envToken = $_ENV['MAPBOX_ACCESS_TOKEN'] ?? getenv('MAPBOX_ACCESS_TOKEN');
+        $this->mapboxAccessToken = is_string($envToken) ? $envToken : '';
     }
 
     /**
      * Get distance from Mapbox for single origin-destination pair
+     *
+     * @param array{lat: float|int|string, lon: float|int|string} $origin
+     * @param array{lat: float|int|string, lon: float|int|string} $destination
+     * @return array{distance: int, source: string}
      */
     public function getDistance(array $origin, array $destination): array
     {
@@ -36,8 +41,13 @@ class MapboxService
             throw new Exception("Mapbox access token is not configured.");
         }
 
-        $originCoords = "{$origin['lon']},{$origin['lat']}";
-        $destCoords = "{$destination['lon']},{$destination['lat']}";
+        $originLon = $this->toFloat($origin['lon'], 'origin.lon');
+        $originLat = $this->toFloat($origin['lat'], 'origin.lat');
+        $destLon = $this->toFloat($destination['lon'], 'destination.lon');
+        $destLat = $this->toFloat($destination['lat'], 'destination.lat');
+
+        $originCoords = sprintf('%.6f,%.6f', $originLon, $originLat);
+        $destCoords = sprintf('%.6f,%.6f', $destLon, $destLat);
         $endpoint = "/directions/v5/mapbox/driving/{$originCoords};{$destCoords}";
 
         $maxRetries = 10;
@@ -51,13 +61,17 @@ class MapboxService
 
                 $data = json_decode($response->getBody()->getContents(), true);
 
-                if (empty($data['routes'][0])) {
+                if (!is_array($data) || !isset($data['routes']) || !is_array($data['routes'])) {
+                    throw new Exception('No route found by Mapbox.');
+                }
+                $routes = $data['routes'];
+                if (!isset($routes[0]) || !is_array($routes[0])) {
                     throw new Exception('No route found by Mapbox.');
                 }
 
-                $route = $data['routes'][0];
+                $route = $routes[0];
                 return [
-                    'distance' => (int) $route['distance'],
+                    'distance' => (int) (isset($route['distance']) && is_numeric($route['distance']) ? $route['distance'] : 0),
                     'source' => 'mapbox'
                 ];
             } catch (RequestException $e) {
@@ -91,6 +105,15 @@ class MapboxService
 
     /**
      * Get distances for multiple origins using Mapbox Matrix API
+     *
+     * @param array{lat: float|int|string, lon: float|int|string} $destination
+     * @param list<array{
+     *   driverId?: int|string,
+     *   id?: int|string,
+     *   origin?: array,
+     *   coordinates?: array
+     * }> $originsChunk
+     * @return array<string|int, array{distance:int, source:string}>
      */
     public function getDistancesMatrix(array $destination, array $originsChunk): array
     {
@@ -99,23 +122,33 @@ class MapboxService
         }
 
         $coordinates = [];
-        $coordinates[] = "{$destination['lon']},{$destination['lat']}"; // Destination first
+        $destLon = $this->toFloat($destination['lon'], 'destination.lon');
+        $destLat = $this->toFloat($destination['lat'], 'destination.lat');
+        $coordinates[] = sprintf('%.6f,%.6f', $destLon, $destLat); // Destination first
 
         foreach ($originsChunk as $origin) {
-            // Validate that origin is an array
-            if (!is_array($origin)) {
-                throw new Exception("Invalid origin type: expected array, got " . gettype($origin));
-            }
 
             // Handle structure from DistanceController: ['driverId' => ..., 'origin' => ['lat' => ..., 'lon' => ...]]
-            if (isset($origin['origin']) && isset($origin['origin']['lat']) && isset($origin['origin']['lon'])) {
-                $coordinates[] = "{$origin['origin']['lon']},{$origin['origin']['lat']}";
-            } elseif (isset($origin['coordinates']) && isset($origin['coordinates']['lat']) && isset($origin['coordinates']['lon'])) {
-                // Fallback for old structure: ['coordinates' => ['lat' => ..., 'lon' => ...]]
-                $coordinates[] = "{$origin['coordinates']['lon']},{$origin['coordinates']['lat']}";
-            } else {
-                throw new Exception("Invalid origin structure: missing coordinates");
+            if (isset($origin['origin']) && is_array($origin['origin'])) {
+                $o = $origin['origin'];
+                if (array_key_exists('lat', $o) && array_key_exists('lon', $o)) {
+                    $oLon = $this->toFloat($o['lon'], 'origin.lon');
+                    $oLat = $this->toFloat($o['lat'], 'origin.lat');
+                    $coordinates[] = sprintf('%.6f,%.6f', $oLon, $oLat);
+                    continue;
+                }
             }
+            if (isset($origin['coordinates']) && is_array($origin['coordinates'])) {
+                // Fallback for old structure: ['coordinates' => ['lat' => ..., 'lon' => ...]]
+                $c = $origin['coordinates'];
+                if (array_key_exists('lat', $c) && array_key_exists('lon', $c)) {
+                    $oLon = $this->toFloat($c['lon'], 'coordinates.lon');
+                    $oLat = $this->toFloat($c['lat'], 'coordinates.lat');
+                    $coordinates[] = sprintf('%.6f,%.6f', $oLon, $oLat);
+                    continue;
+                }
+            }
+            throw new Exception("Invalid origin structure: missing coordinates");
         }
 
         $coordsString = implode(';', $coordinates);
@@ -144,7 +177,7 @@ class MapboxService
                 $data = json_decode($responseBody, true);
 
                 // Validate basic response structure
-                if (!isset($data['distances']) || !is_array($data['distances'])) {
+                if (!is_array($data) || !isset($data['distances']) || !is_array($data['distances'])) {
                     throw new Exception('Invalid response from Mapbox Matrix API: missing distances array.');
                 }
 
@@ -156,7 +189,7 @@ class MapboxService
                 $results = [];
                 foreach ($originsChunk as $index => $origin) {
                     // Validate this specific distance exists
-                    if (!isset($data['distances'][$index]) || !isset($data['distances'][$index][0])) {
+                    if (!isset($data['distances'][$index]) || !is_array($data['distances'][$index]) || !array_key_exists(0, $data['distances'][$index])) {
                         continue;
                     }
 
@@ -166,7 +199,7 @@ class MapboxService
                         // Extract driverId from the correct structure
                         $driverId = $origin['driverId'] ?? $origin['id'] ?? $index;
                         $results[$driverId] = [
-                            'distance' => (int) $distance,
+                            'distance' => (int) (is_numeric($distance) ? $distance : 0),
                             'source' => 'mapbox'
                         ];
                     }
@@ -199,5 +232,24 @@ class MapboxService
         }
 
         throw new Exception("Failed to get distances from Mapbox Matrix API after all retries.");
+    }
+
+    /**
+     * Normalize a numeric-ish value to float, throwing a descriptive error when invalid.
+     *
+     * @param float|int|string|null $value
+     */
+    private function toFloat($value, string $field): float
+    {
+        if ($value === null || $value === '') {
+            throw new Exception("Missing required coordinate field: {$field}");
+        }
+        if (is_string($value)) {
+            $value = trim($value);
+        }
+        if (!is_numeric($value)) {
+            throw new Exception("Invalid coordinate value for {$field}: must be numeric");
+        }
+        return (float) $value;
     }
 }

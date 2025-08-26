@@ -5,7 +5,7 @@ namespace App\Controllers;
 use App\Services\GeocoderService;
 use App\Core\Logger;
 use App\Core\Database;
-use App\Core\Auth;
+use App\Core\HybridAuth;
 use Firebase\JWT\JWT;
 use Exception;
 use PDO;
@@ -162,7 +162,7 @@ class SearchController
         }
 
         try {
-            $user = Auth::getCurrentUser();
+            $user = HybridAuth::getCurrentUser();
             if (!$user || !isset($user->id)) {
                 http_response_code(401);
                 echo json_encode([

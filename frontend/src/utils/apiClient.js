@@ -1,4 +1,4 @@
-import { getToken, logout } from './auth';
+import { supabaseHelpers } from '../supabaseClient';
 
 /**
  * A custom fetch wrapper that adds the Authorization header to every request.
@@ -9,7 +9,9 @@ import { getToken, logout } from './auth';
  * @returns {Promise<Response>} The fetch Response object.
  */
 export async function apiClient(url, options = {}) {
-    const token = getToken();
+    // Source token from Supabase session
+    const { data: sessionData } = await supabaseHelpers.getCurrentSession();
+    const token = sessionData?.session?.access_token || null;
 
     const headers = {
         'Content-Type': 'application/json',
@@ -22,17 +24,14 @@ export async function apiClient(url, options = {}) {
 
     const config = {
         ...options,
-        headers,
-        credentials: 'include'
+        headers
     };
 
     const response = await fetch(url, config);
 
     if (response.status === 401) {
-        // The token is invalid or expired.
-        // Log the user out and reload to show the login page.
-        logout();
-        // We throw an error to prevent the rest of the code from executing
+        // Attempt silent sign-out so UI can react via auth context without full reload
+        try { await supabaseHelpers.signOut(); } catch (_) {}
         throw new Error('Session expired. Please log in again.');
     }
 

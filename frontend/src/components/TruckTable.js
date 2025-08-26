@@ -52,11 +52,34 @@ const TruckTable = ({
     setExpandedCards(newExpandedCards);
   };
 
-  // Show raw arrival text
-
+  // Formats the arrival time to display the date in bold and the time on a new line.
+  // The column width will not be changed.
   const formatArrivalRaw = (value) => {
     if (value === null || value === undefined || value === '') return '-';
-    return String(value);
+    
+    const dateObj = new Date(value);
+    // Check if the date is valid
+    if (isNaN(dateObj.getTime())) {
+      return String(value); // Return original value if invalid date
+    }
+
+    const dateOptions = { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit' 
+    };
+    const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
+
+    const formattedDate = dateObj.toLocaleDateString('en-CA', dateOptions);
+    const formattedTime = dateObj.toLocaleTimeString(undefined, timeOptions);
+    
+    return (
+      <>
+        <strong>{formattedDate}</strong>
+        {' '}
+        {formattedTime}
+      </>
+    );
   };
 
   const commentPreview = (comment) => {
@@ -250,7 +273,7 @@ const TruckTable = ({
                   onClick={() => onCommentClick(truck.comment)}
                   title={truck.comment}
                 >
-                  {truck.comment}
+                  {commentPreview(truck.comment)}
                 </span>
               </div>
             )}

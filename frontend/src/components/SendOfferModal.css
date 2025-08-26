@@ -1,0 +1,202 @@
+.send-offer-modal {
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.send-offer-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.send-offer-modal .modal-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.send-offer-modal .close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-offer-modal .close-btn:hover {
+  color: #333;
+}
+
+.send-offer-modal .modal-body {
+  padding: 0 24px 24px;
+}
+
+.send-offer-modal .error-message {
+  background-color: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.send-offer-modal .selected-drivers-info {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.send-offer-modal .selected-drivers-info h3 {
+  margin: 0 0 12px 0;
+  color: #495057;
+  font-size: 16px;
+}
+
+.send-offer-modal .drivers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.send-offer-modal .driver-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  background-color: white;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.send-offer-modal .truck-no {
+  font-weight: bold;
+  color: #007bff;
+  min-width: 60px;
+}
+
+.send-offer-modal .driver-name {
+  flex: 1;
+  color: #333;
+}
+
+.send-offer-modal .driver-phone {
+  color: #666;
+  font-size: 14px;
+}
+
+.send-offer-modal .offer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.send-offer-modal .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.send-offer-modal .form-group label {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.send-offer-modal .form-group input {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.send-offer-modal .form-group input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.send-offer-modal .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.send-offer-modal .form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.send-offer-modal .cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #ddd;
+  background-color: white;
+  color: #666;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.send-offer-modal .cancel-btn:hover:not(:disabled) {
+  background-color: #f8f9fa;
+  border-color: #adb5bd;
+}
+
+.send-offer-modal .submit-btn {
+  padding: 10px 20px;
+  border: none;
+  background-color: #007bff;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.send-offer-modal .submit-btn:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.send-offer-modal .submit-btn:disabled,
+.send-offer-modal .cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .send-offer-modal {
+    width: 95%;
+    margin: 20px auto;
+  }
+  
+  .send-offer-modal .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .send-offer-modal .form-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .send-offer-modal .form-actions button {
+    width: 100%;
+  }
+}

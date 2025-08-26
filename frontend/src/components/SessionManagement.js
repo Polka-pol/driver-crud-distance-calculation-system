@@ -2,56 +2,52 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '../utils/apiClient';
 import { API_BASE_URL } from '../config';
 import './AdminPanel.css';
-import './SessionManagement.css'; // Keep specific styles for session management
+import './SessionManagement.css';
 import UserModal from './UserModal';
-import { usePermissions } from '../context/PermissionsContext';
+import { useAuth } from '../context/HybridAuthContext';
 
 const SessionManagement = () => {
-    const { has } = usePermissions();
-    const [sessionData, setSessionData] = useState(null);
+    const { user: currentUser } = useAuth();
+    const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const [sortBy, setSortBy] = useState('last_activity'); // 'username', 'last_activity'
-    const [sortOrder, setSortOrder] = useState('desc');
-    const [logoutLoading, setLogoutLoading] = useState({});
+    const [sortBy, setSortBy] = useState('email');
+    const [sortOrder, setSortOrder] = useState('asc');
     
     // User Management states
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [userActionLoading, setUserActionLoading] = useState({});
+    const [passwordResetLoading, setPasswordResetLoading] = useState({});
 
     useEffect(() => {
-        fetchSessionData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        fetchUsers();
     }, []);
 
-    const fetchSessionData = async () => {
+    const fetchUsers = async () => {
         try {
             setIsLoading(true);
-            if (!has('sessions.manage')) {
-                throw new Error('You do not have permission to view session management.');
-            }
-            const response = await apiClient(`${API_BASE_URL}/dashboard/session-management`);
+            
+            const response = await apiClient(`${API_BASE_URL}/admin/users`);
+            
             if (!response.ok) {
-                throw new Error('Failed to fetch session data');
+                throw new Error('Failed to fetch users');
             }
+            
             const data = await response.json();
-            setSessionData(data);
+            
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to fetch users');
+            }
+            
+            setUsers(data.users || []);
             setError(null);
         } catch (err) {
+            console.error('Error fetching users:', err);
             setError(err.message);
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const getStatusBadgeClass = (status) => {
-        switch (status) {
-            case 'active': return 'session-status-badge active';
-            case 'idle': return 'session-status-badge idle';
-            case 'offline': return 'session-status-badge offline';
-            default: return 'session-status-badge';
         }
     };
 
@@ -64,25 +60,23 @@ const SessionManagement = () => {
         }
     };
 
-
-
-    const filteredAndSortedSessions = () => {
-        if (!sessionData || !sessionData.sessions) return [];
+    const filteredAndSortedUsers = () => {
+        if (!users) return [];
         
-        let filtered = sessionData.sessions;
+        let filtered = [...users];
         
         // Sort
         filtered.sort((a, b) => {
             let aVal, bVal;
             
             switch (sortBy) {
-                case 'username':
-                    aVal = a.username?.toLowerCase() || '';
-                    bVal = b.username?.toLowerCase() || '';
+                case 'email':
+                    aVal = a.email?.toLowerCase() || '';
+                    bVal = b.email?.toLowerCase() || '';
                     break;
-                case 'last_activity':
-                    aVal = a.last_activity ? new Date(a.last_activity).getTime() : 0;
-                    bVal = b.last_activity ? new Date(b.last_activity).getTime() : 0;
+                case 'created_at':
+                    aVal = new Date(a.created_at).getTime();
+                    bVal = new Date(b.created_at).getTime();
                     break;
                 default:
                     return 0;
@@ -107,46 +101,38 @@ const SessionManagement = () => {
         }
     };
 
-    const handleLogoutUser = async (userId, username) => {
-        if (!has('sessions.manage')) {
-            alert('You do not have permission to logout users.');
-            return;
-        }
-        if (!window.confirm(`Are you sure you want to logout user "${username}"?`)) {
+
+    const handleChangePassword = async (userId, email) => {
+        const newPassword = prompt(`Enter new password for ${email}:`);
+        if (!newPassword || newPassword.length < 6) {
+            alert('Password must be at least 6 characters long');
             return;
         }
 
-        setLogoutLoading(prev => ({ ...prev, [userId]: true }));
+        setPasswordResetLoading(prev => ({ ...prev, [userId]: true }));
 
         try {
-            const currentUser = JSON.parse(localStorage.getItem('user'));
-            const response = await apiClient(`${API_BASE_URL}/dashboard/logout-user`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    user_id: userId,
-                    admin_user_id: currentUser.id
-                })
+            const response = await apiClient(`${API_BASE_URL}/admin/users/${userId}/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ password: newPassword })
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to logout user');
+                throw new Error('Failed to change password');
             }
 
-            const result = await response.json();
+            const data = await response.json();
             
-            if (result.success) {
-                // Refresh session data to show updated status
-                await fetchSessionData();
-                // Show success message
-                alert(`User "${username}" has been logged out successfully.`);
-            } else {
-                throw new Error(result.message || 'Failed to logout user');
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to change password');
             }
+
+            alert(`Password changed successfully for ${email}`);
         } catch (err) {
-            alert(`Error logging out user: ${err.message}`);
+            console.error('Error changing password:', err);
+            alert(`Error changing password: ${err.message}`);
         } finally {
-            setLogoutLoading(prev => ({ ...prev, [userId]: false }));
+            setPasswordResetLoading(prev => ({ ...prev, [userId]: false }));
         }
     };
 
@@ -164,35 +150,33 @@ const SessionManagement = () => {
     const handleSaveUser = async (userData, userId) => {
         try {
             let response;
+            
             if (userId) {
-                if (!has('users.manage')) {
-                    alert('You do not have permission to update users.');
-                    return;
-                }
                 // Update user
-                response = await apiClient(`${API_BASE_URL}/users/${userId}`, {
+                response = await apiClient(`${API_BASE_URL}/admin/users/${userId}`, {
                     method: 'PUT',
-                    body: JSON.stringify(userData),
+                    body: JSON.stringify(userData)
                 });
             } else {
-                if (!has('users.manage')) {
-                    alert('You do not have permission to create users.');
-                    return;
-                }
                 // Create user
-                response = await apiClient(`${API_BASE_URL}/users`, {
+                response = await apiClient(`${API_BASE_URL}/admin/users`, {
                     method: 'POST',
-                    body: JSON.stringify(userData),
+                    body: JSON.stringify(userData)
                 });
             }
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to save user.');
+                throw new Error('Failed to save user');
+            }
+
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to save user');
             }
 
             setIsUserModalOpen(false);
-            await fetchSessionData(); // Refresh the session data to show new/updated user
+            await fetchUsers();
             alert(`User ${userId ? 'updated' : 'created'} successfully!`);
         } catch (err) {
             console.error("Failed to save user:", err);
@@ -200,36 +184,35 @@ const SessionManagement = () => {
         }
     };
 
-    const handleDeleteUser = async (userId, username) => {
-        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-        
-        if (!has('users.manage')) {
-            alert('You do not have permission to delete users.');
-            return;
-        }
-        if (userId === currentUser.id) {
+    const handleDeleteUser = async (userId, email) => {
+        if (userId === currentUser?.id) {
             alert('You cannot delete yourself!');
             return;
         }
 
-        if (!window.confirm(`Are you sure you want to delete user "${username}"?`)) {
+        if (!window.confirm(`Are you sure you want to delete user "${email}"?`)) {
             return;
         }
 
         setUserActionLoading(prev => ({ ...prev, [userId]: true }));
 
         try {
-            const response = await apiClient(`${API_BASE_URL}/users/${userId}`, { 
-                method: 'DELETE' 
+            const response = await apiClient(`${API_BASE_URL}/admin/users/${userId}`, {
+                method: 'DELETE'
             });
             
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to delete user.');
+                throw new Error('Failed to delete user');
+            }
+
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to delete user');
             }
             
-            await fetchSessionData(); // Refresh the session data
-            alert(`User "${username}" deleted successfully!`);
+            await fetchUsers();
+            alert(`User "${email}" deleted successfully!`);
         } catch (err) {
             console.error("Failed to delete user:", err);
             alert(`Error deleting user: ${err.message}`);
@@ -238,12 +221,10 @@ const SessionManagement = () => {
         }
     };
 
-    if (isLoading) return <div className="session-management-container"><p>Loading session data...</p></div>;
+    if (isLoading) return <div className="session-management-container"><p>Loading users...</p></div>;
     if (error) return <div className="session-management-container"><p className="error-message">Error: {error}</p></div>;
-    if (!sessionData) return <div className="session-management-container"><p>No session data available.</p></div>;
 
-    const { stats } = sessionData;
-    const filteredSessions = filteredAndSortedSessions();
+    const filteredUsers = filteredAndSortedUsers();
 
     return (
         <div className="admin-container">
@@ -254,141 +235,111 @@ const SessionManagement = () => {
                 user={editingUser}
             />
             <div className="admin-header">
-                <h3>User & Session Management</h3>
+                <h3>User Management</h3>
                 <div className="admin-header-actions">
                     <button onClick={handleAddUser} className="admin-btn primary">
                         👤 Add User
                     </button>
-                    <button onClick={fetchSessionData} className="admin-btn" disabled={isLoading}>
+                    <button onClick={fetchUsers} className="admin-btn" disabled={isLoading}>
                         🔄 Refresh
                     </button>
                 </div>
             </div>
 
-            {/* Session Statistics */}
+            {/* User Statistics */}
             <div className="admin-stats">
                 <div className="admin-stat-card primary">
-                    <h4>Active Sessions</h4>
-                    <p>{stats.active_sessions}</p>
+                    <h4>Total Users</h4>
+                    <p>{users.length}</p>
                 </div>
                 <div className="admin-stat-card secondary">
-                    <h4>Idle Sessions</h4>
-                    <p>{stats.idle_sessions}</p>
-                </div>
-                <div className="admin-stat-card danger">
-                    <h4>Offline Users</h4>
-                    <p>{stats.offline_sessions}</p>
+                    <h4>Confirmed Users</h4>
+                    <p>{users.filter(u => u.email_confirmed_at).length}</p>
                 </div>
                 <div className="admin-stat-card info">
-                    <h4>Active Today</h4>
-                    <p>{stats.unique_users_today}</p>
+                    <h4>Recent Users</h4>
+                    <p>{users.filter(u => new Date(u.created_at) > new Date(Date.now() - 7*24*60*60*1000)).length}</p>
                 </div>
             </div>
 
-
-
-            {/* Sessions Table */}
+            {/* Users Table */}
             <div className="admin-table-container">
                 <table className="admin-table">
                     <thead>
                         <tr>
-                            <th onClick={() => handleSort('username')} className="sortable">
-                                User {sortBy === 'username' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            <th onClick={() => handleSort('email')} className="sortable">
+                                Email {sortBy === 'email' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
+                            <th>Full Name</th>
+                            <th>Username</th>
                             <th>Role</th>
-                            <th>Status</th>
-                            <th onClick={() => handleSort('last_activity')} className="sortable">
-                                Last Activity {sortBy === 'last_activity' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            <th>Mobile</th>
+                            <th onClick={() => handleSort('created_at')} className="sortable">
+                                Created {sortBy === 'created_at' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
-                            <th>Session Duration</th>
-                            <th>Contact</th>
+                            <th>Status</th>
                             <th>Edit</th>
+                            <th>Password</th>
                             <th>Delete</th>
-                            <th>Logout</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredSessions.map((session) => (
-                            <tr key={session.id} className={`session-row ${session.status}`}>
-                                <td className="username">{session.full_name || session.username}</td>
+                        {filteredUsers.map((user) => (
+                            <tr key={user.id}>
+                                <td className="email">{user.email}</td>
+                                <td>{user.user_metadata?.full_name || '-'}</td>
+                                <td>{user.user_metadata?.username || '-'}</td>
                                 <td>
-                                    <span className={getRoleBadgeClass(session.role)}>
-                                        {session.role}
+                                    <span className={getRoleBadgeClass(user.user_metadata?.role)}>
+                                        {user.user_metadata?.role || 'dispatcher'}
                                     </span>
                                 </td>
+                                <td>{user.user_metadata?.mobile_number || '-'}</td>
+                                <td>{new Date(user.created_at).toLocaleDateString()}</td>
                                 <td>
-                                    <span className={getStatusBadgeClass(session.status)}>
-                                        {session.status}
+                                    <span className={user.email_confirmed_at ? 'session-status-badge active' : 'session-status-badge offline'}>
+                                        {user.email_confirmed_at ? 'Confirmed' : 'Pending'}
                                     </span>
-                                </td>
-                                <td className="last-activity">
-                                    {session.last_activity_formatted}
-                                </td>
-                                <td className="session-duration">
-                                    {session.session_duration}
-                                </td>
-                                <td className="contact">
-                                    {session.mobile_number || '-'}
                                 </td>
                                 <td className="actions">
                                     <button
                                         className="edit-user-btn"
                                         onClick={() => handleEditUser({
-                                            id: session.id,
-                                            username: session.username,
-                                            full_name: session.full_name,
-                                            mobile_number: session.mobile_number,
-                                            role: session.role
+                                            id: user.id,
+                                            email: user.email,
+                                            username: user.user_metadata?.username,
+                                            full_name: user.user_metadata?.full_name,
+                                            mobile_number: user.user_metadata?.mobile_number,
+                                            role: user.user_metadata?.role || 'dispatcher'
                                         })}
-                                        title={`Edit ${session.username}`}
+                                        title={`Edit ${user.email}`}
                                     >
                                         ✏️
                                     </button>
                                 </td>
                                 <td className="actions">
-                                    {(() => {
-                                        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-                                        const isCurrentUser = session.id === currentUser.id;
-                                        
-                                        if (isCurrentUser) {
-                                            return <span className="no-action" title="Cannot delete yourself">🔒</span>;
-                                        } else {
-                                            return (
-                                                <button
-                                                    className="delete-user-btn"
-                                                    onClick={() => handleDeleteUser(session.id, session.username)}
-                                                    disabled={userActionLoading[session.id]}
-                                                    title={`Delete ${session.username}`}
-                                                >
-                                                    {userActionLoading[session.id] ? '⏳' : '🗑️'}
-                                                </button>
-                                            );
-                                        }
-                                    })()}
+                                    <button
+                                        className="admin-btn secondary"
+                                        onClick={() => handleChangePassword(user.id, user.email)}
+                                        disabled={passwordResetLoading[user.id]}
+                                        title={`Change password for ${user.email}`}
+                                    >
+                                        {passwordResetLoading[user.id] ? '⏳' : '🔑'}
+                                    </button>
                                 </td>
                                 <td className="actions">
-                                    {(() => {
-                                        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-                                        const isCurrentUser = session.id === currentUser.id;
-                                        const canLogout = (session.status === 'active' || session.status === 'idle') && !isCurrentUser;
-                                        
-                                        if (canLogout) {
-                                            return (
-                                                <button
-                                                    className="logout-user-btn"
-                                                    onClick={() => handleLogoutUser(session.id, session.username)}
-                                                    disabled={logoutLoading[session.id]}
-                                                    title={`Logout ${session.username}`}
-                                                >
-                                                    {logoutLoading[session.id] ? '⏳' : '🚪'}
-                                                </button>
-                                            );
-                                        } else if (isCurrentUser) {
-                                            return <span className="no-action" title="Cannot logout yourself">🔒</span>;
-                                        } else {
-                                            return <span className="no-action">-</span>;
-                                        }
-                                    })()}
+                                    {user.id === currentUser?.id ? (
+                                        <span className="no-action" title="Cannot delete yourself">🔒</span>
+                                    ) : (
+                                        <button
+                                            className="delete-user-btn"
+                                            onClick={() => handleDeleteUser(user.id, user.email)}
+                                            disabled={userActionLoading[user.id]}
+                                            title={`Delete ${user.email}`}
+                                        >
+                                            {userActionLoading[user.id] ? '⏳' : '🗑️'}
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -396,8 +347,8 @@ const SessionManagement = () => {
                 </table>
             </div>
 
-            {filteredSessions.length === 0 ? (
-                <div className="admin-no-data">No sessions match the current filter.</div>
+            {filteredUsers.length === 0 ? (
+                <div className="admin-no-data">No users found.</div>
             ) : null}
 
             <div className="admin-footer">

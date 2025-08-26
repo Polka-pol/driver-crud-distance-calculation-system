@@ -3,9 +3,9 @@
 namespace App\Controllers;
 
 use App\Core\Database;
-use App\Core\Auth;
 use App\Core\Authz;
 use App\Core\Logger;
+use App\Core\HybridAuth;
 use PDO;
 use PDOException;
 
@@ -91,7 +91,7 @@ class RbacController
             $stmt->execute(['n' => $name, 'd' => $description]);
             \App\Core\ActivityLogger::log('rbac_role_created', [
                 'role_name' => $name,
-                'created_by' => (\App\Core\Auth::getCurrentUser()->username ?? 'unknown')
+                'created_by' => (HybridAuth::getCurrentUser()->username ?? 'unknown')
             ]);
             self::send(['success' => true, 'id' => (int)$pdo->lastInsertId()], 201);
         } catch (\Throwable $e) {
@@ -143,7 +143,7 @@ class RbacController
             \App\Core\ActivityLogger::log('rbac_role_updated', [
                 'role_id' => $roleId,
                 'updated_fields' => array_keys($params),
-                'updated_by' => (\App\Core\Auth::getCurrentUser()->username ?? 'unknown')
+                'updated_by' => (HybridAuth::getCurrentUser()->username ?? 'unknown')
             ]);
             self::send(['success' => true]);
         } catch (\Throwable $e) {
@@ -173,7 +173,7 @@ class RbacController
             $pdo->prepare("DELETE FROM roles WHERE id = :id")->execute(['id' => $roleId]);
             \App\Core\ActivityLogger::log('rbac_role_deleted', [
                 'role_id' => $roleId,
-                'deleted_by' => (\App\Core\Auth::getCurrentUser()->username ?? 'unknown')
+                'deleted_by' => (HybridAuth::getCurrentUser()->username ?? 'unknown')
             ]);
             self::send(['success' => true]);
         } catch (\Throwable $e) {
@@ -218,7 +218,7 @@ class RbacController
             \App\Core\ActivityLogger::log('rbac_role_permissions_set', [
                 'role_id' => $roleId,
                 'permissions' => $keys,
-                'updated_by' => (\App\Core\Auth::getCurrentUser()->username ?? 'unknown')
+                'updated_by' => (HybridAuth::getCurrentUser()->username ?? 'unknown')
             ]);
             self::send(['success' => true]);
         } catch (\Throwable $e) {
@@ -233,7 +233,7 @@ class RbacController
 
     public static function mePermissions(): void
     {
-        Auth::protect();
+        HybridAuth::protect();
         $perms = Authz::getCurrentUserPermissions();
         self::send(['success' => true, 'data' => $perms]);
     }

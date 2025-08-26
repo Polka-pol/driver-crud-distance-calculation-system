@@ -91,9 +91,13 @@ class DashboardController
             // Exclude individual cache/mapbox records, show aggregated distance info
             // =========================================================
             $recentActivitiesStmt = $pdo->query("
-                SELECT a.action, a.details, a.created_at, a.user_id, u.username, u.full_name, u.role 
+                SELECT a.action, a.details, a.created_at, a.user_id, a.supabase_user_id,
+                       COALESCE(u.username, su.username) AS username,
+                       COALESCE(u.full_name, su.full_name) AS full_name,
+                       COALESCE(u.role, su.role) AS role
                 FROM activity_logs a
-                JOIN users u ON a.user_id = u.id
+                LEFT JOIN users u ON a.user_id = u.id
+                LEFT JOIN users su ON a.supabase_user_id = su.supabase_user_id
                 WHERE a.action NOT IN ('distance_calculation_cached', 'distance_calculation_mapbox')
                 ORDER BY a.created_at DESC
                 LIMIT 50
@@ -112,11 +116,23 @@ class DashboardController
                 } catch (\Throwable $e) {
                     $createdAtIso = $activity['created_at'];
                 }
+                // Handle user display for both MySQL and Supabase users
+                $username = $activity['username'];
+                $fullName = $activity['full_name'];
+                $role = $activity['role'];
+                
+                // If no MySQL user info but we have a Supabase user ID, show Supabase user
+                if (!$username && !empty($activity['supabase_user_id'])) {
+                    $username = 'Supabase User';
+                    $fullName = substr($activity['supabase_user_id'], 0, 8) . '...';
+                    $role = 'supabase_user';
+                }
+                
                 $processedActivity = [
                     'action' => $activity['action'],
-                    'username' => $activity['username'],
-                    'full_name' => $activity['full_name'],
-                    'role' => $activity['role'],
+                    'username' => $username,
+                    'full_name' => $fullName,
+                    'role' => $role,
                     'created_at' => $createdAtIso,
                     'summary' => self::generateActivitySummary($activity, $pdo)
                 ];
@@ -130,9 +146,9 @@ class DashboardController
             $todayStart = \App\Core\TimeService::startOfDayAppTz(\App\Core\TimeService::nowAppTz())->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
             $userDailyStatsStmt = $pdo->prepare("
                 SELECT
-                    u.username,
-                    u.full_name,
-                    u.role,
+                    COALESCE(u.username, 'Supabase User') as username,
+                    COALESCE(u.full_name, CONCAT(SUBSTRING(a.supabase_user_id, 1, 8), '...')) as full_name,
+                    COALESCE(u.role, 'supabase_user') as role,
                     MIN(a.created_at) as first_activity_today,
                     MAX(a.created_at) as last_activity_today,
                     COUNT(CASE WHEN a.action = 'distance_batch_calculated' 
@@ -142,10 +158,11 @@ class DashboardController
                     COUNT(CASE WHEN a.action = 'truck_updated' THEN 1 END) as truck_updates_today,
                     COUNT(CASE WHEN a.action = 'truck_created' THEN 1 END) as truck_creates_today,
                     COUNT(CASE WHEN a.action = 'user_created' THEN 1 END) as user_creates_today
-                FROM users u
-                LEFT JOIN activity_logs a ON u.id = a.user_id AND a.created_at >= :today
-                GROUP BY u.id, u.username, u.full_name, u.role
-                ORDER BY distance_calcs_today DESC, u.username
+                FROM activity_logs a
+                LEFT JOIN users u ON a.user_id = u.id
+                WHERE a.created_at >= :today
+                GROUP BY COALESCE(a.user_id, a.supabase_user_id), u.username, u.full_name, u.role, a.supabase_user_id
+                ORDER BY distance_calcs_today DESC, username
             ");
             $userDailyStatsStmt->execute([':today' => $todayStart]);
             $userDailyStats = $userDailyStatsStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -170,15 +187,15 @@ class DashboardController
             // =========================================================
             $topUsersStmt = $pdo->prepare("
                 SELECT 
-                    u.username,
-                    u.full_name,
-                    u.role,
+                    COALESCE(u.username, 'Supabase User') as username,
+                    COALESCE(u.full_name, CONCAT(SUBSTRING(a.supabase_user_id, 1, 8), '...')) as full_name,
+                    COALESCE(u.role, 'supabase_user') as role,
                     COUNT(a.action) as total_activities,
                     MAX(a.created_at) as last_activity
-                FROM users u
-                JOIN activity_logs a ON u.id = a.user_id
+                FROM activity_logs a
+                LEFT JOIN users u ON a.user_id = u.id
                 WHERE a.created_at >= ?
-                GROUP BY u.id, u.username, u.full_name, u.role
+                GROUP BY COALESCE(a.user_id, a.supabase_user_id), u.username, u.full_name, u.role, a.supabase_user_id
                 ORDER BY total_activities DESC
                 LIMIT 5
             ");
@@ -214,16 +231,16 @@ class DashboardController
             // Use distance_log for accurate user statistics
             $userStatsDbStmt = $pdo->prepare("
                 SELECT
-                    u.username,
-                    u.role,
+                    COALESCE(u.username, 'Supabase User') as username,
+                    COALESCE(u.role, 'supabase_user') as role,
                     COUNT(dl.id) as queries_made,
                     SUM(dl.cache_hits) as cache_hits_used,
                     SUM(dl.mapbox_requests) as mapbox_requests_used,
                     SUM(dl.total_origins) as total_origins_checked
-                FROM users u
-                LEFT JOIN distance_log dl ON u.id = dl.user_id
+                FROM distance_log dl
+                LEFT JOIN users u ON dl.user_id = u.id
                 WHERE dl.created_at >= ?
-                GROUP BY u.id, u.username, u.role
+                GROUP BY COALESCE(dl.user_id, dl.supabase_user_id), u.username, u.role, dl.supabase_user_id
                 HAVING queries_made > 0
                 ORDER BY queries_made DESC
             ");

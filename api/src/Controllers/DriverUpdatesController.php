@@ -3,7 +3,7 @@
 namespace App\Controllers;
 
 use App\Core\Database;
-use App\Core\Auth;
+use App\Core\HybridAuth;
 use App\Core\Logger;
 use App\Core\DriverActivityLogger;
 use App\Core\EDTTimeConverter;
@@ -27,7 +27,7 @@ class DriverUpdatesController
     {
         try {
             $pdo = Database::getConnection();
-            $currentUser = Auth::getCurrentUser();
+            $currentUser = HybridAuth::getCurrentUser();
 
             // Get query parameters
             $view = $_GET['view'] ?? 'my'; // 'my', 'all', or 'unassigned'
@@ -89,16 +89,25 @@ class DriverUpdatesController
 
         $params = [];
 
+        // Debug logging
+        error_log("DriverUpdates DEBUG - View: " . $view);
+        error_log("DriverUpdates DEBUG - Current User: " . ($currentUser ? json_encode(['id' => $currentUser->id, 'role' => $currentUser->role]) : 'null'));
+
         // Filter by dispatcher based on view
         if ($view === 'my' && $currentUser) {
             $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
             $params['dispatcher_id'] = $currentUser->id;
+            error_log("DriverUpdates DEBUG - Filtering by 'my' view with dispatcher_id: " . $currentUser->id);
         } elseif ($view === 'unassigned') {
             $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
-        } elseif (is_numeric($view)) {
-            // View is a dispatcher ID
+            error_log("DriverUpdates DEBUG - Filtering by 'unassigned' view");
+        } elseif ($view !== 'all' && $view !== 'my' && $view !== 'unassigned' && !empty($view)) {
+            // View is a dispatcher ID (UUID or legacy int)
             $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
-            $params['dispatcher_id'] = (int)$view;
+            $params['dispatcher_id'] = $view;
+            error_log("DriverUpdates DEBUG - Filtering by specific dispatcher_id: " . $view);
+        } else {
+            error_log("DriverUpdates DEBUG - Using 'all' view, no filter applied");
         }
         // For 'all' view, no additional filter is applied
 
@@ -150,16 +159,25 @@ class DriverUpdatesController
 
         $params = ['one_month_ago' => $oneMonthAgo];
 
+        // Debug logging
+        error_log("DriverUpdates Monthly DEBUG - View: " . $view);
+        error_log("DriverUpdates Monthly DEBUG - Current User: " . ($currentUser ? json_encode(['id' => $currentUser->id, 'role' => $currentUser->role]) : 'null'));
+
         // Filter by dispatcher based on view
         if ($view === 'my' && $currentUser) {
             $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
             $params['dispatcher_id'] = $currentUser->id;
+            error_log("DriverUpdates Monthly DEBUG - Filtering by 'my' view with dispatcher_id: " . $currentUser->id);
         } elseif ($view === 'unassigned') {
             $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
-        } elseif (is_numeric($view)) {
-            // View is a dispatcher ID
+            error_log("DriverUpdates Monthly DEBUG - Filtering by 'unassigned' view");
+        } elseif ($view !== 'all' && $view !== 'my' && $view !== 'unassigned' && !empty($view)) {
+            // View is a dispatcher ID (UUID or legacy int)
             $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
-            $params['dispatcher_id'] = (int)$view;
+            $params['dispatcher_id'] = $view;
+            error_log("DriverUpdates Monthly DEBUG - Filtering by specific dispatcher_id: " . $view);
+        } else {
+            error_log("DriverUpdates Monthly DEBUG - Using 'all' view, no filter applied");
         }
         // For 'all' view, no additional filter is applied
 
@@ -285,7 +303,7 @@ class DriverUpdatesController
     {
         try {
             $pdo = Database::getConnection();
-            $currentUser = Auth::getCurrentUser();
+            $currentUser = HybridAuth::getCurrentUser();
 
             // Get request data
             $input = json_decode(file_get_contents('php://input'), true);
@@ -328,7 +346,7 @@ class DriverUpdatesController
                 'until_date' => $until_date,
                 'comment' => $comment,
                 'edt_time' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'),
-                'updated_by' => $currentUser->fullName ?? $currentUser->username,
+                'updated_by' => \App\Core\UserService::getDisplayName($currentUser),
                 'truck_id' => $truckId
             ]);
 
@@ -336,7 +354,7 @@ class DriverUpdatesController
                 'truck_id' => $truckId,
                 'reason' => $reason,
                 'until_date' => $until_date,
-                'updated_by' => $currentUser->fullName ?? $currentUser->username
+                'updated_by' => \App\Core\UserService::getDisplayName($currentUser)
             ]);
 
             self::sendResponse(['success' => true, 'message' => 'Status updated successfully']);
@@ -360,7 +378,7 @@ class DriverUpdatesController
     {
         try {
             $pdo = Database::getConnection();
-            $currentUser = Auth::getCurrentUser();
+            $currentUser = HybridAuth::getCurrentUser();
 
             // Validate truck exists and user has access
             $checkSql = "SELECT ID, assigned_dispatcher_id FROM Trucks WHERE ID = :truck_id";
@@ -394,13 +412,13 @@ class DriverUpdatesController
             $updateStmt = $pdo->prepare($updateSql);
             $updateStmt->execute([
                 'edt_time' => \App\Core\TimeService::nowUtc()->format('Y-m-d H:i:s'),
-                'updated_by' => $currentUser->fullName ?? $currentUser->username,
+                'updated_by' => \App\Core\UserService::getDisplayName($currentUser),
                 'truck_id' => $truckId
             ]);
 
             Logger::info('Driver no_need_update status cleared', [
                 'truck_id' => $truckId,
-                'updated_by' => $currentUser->fullName ?? $currentUser->username
+                'updated_by' => \App\Core\UserService::getDisplayName($currentUser)
             ]);
 
             self::sendResponse(['success' => true, 'message' => 'Status cleared successfully']);
@@ -426,7 +444,7 @@ class DriverUpdatesController
     {
         try {
             $pdo = Database::getConnection();
-            $currentUser = Auth::getCurrentUser();
+            $currentUser = HybridAuth::getCurrentUser();
 
             // Get query parameters
             $view = $_GET['view'] ?? 'my'; // 'my', 'all', or 'unassigned'
@@ -456,10 +474,10 @@ class DriverUpdatesController
                 $params['dispatcher_id'] = $currentUser->id;
             } elseif ($view === 'unassigned') {
                 $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
-            } elseif (is_numeric($view)) {
-                // View is a dispatcher ID
+            } elseif ($view !== 'all' && $view !== 'my' && $view !== 'unassigned' && !empty($view)) {
+                // View is a dispatcher ID (UUID or legacy int)
                 $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
-                $params['dispatcher_id'] = (int)$view;
+                $params['dispatcher_id'] = $view;
             }
             // For 'all' view, no additional filter is applied
 
@@ -513,7 +531,7 @@ class DriverUpdatesController
                 'updated_status_count' => $updatedCount,
                 'cleared_no_need_count' => $clearedNoNeedCount,
                 'view' => $view,
-                'triggered_by' => $currentUser->fullName ?? $currentUser->username ?? 'System'
+                'triggered_by' => \App\Core\UserService::getDisplayName($currentUser) ?? 'System'
             ]);
 
             self::sendResponse([
@@ -541,7 +559,7 @@ class DriverUpdatesController
     {
         try {
             $pdo = Database::getConnection();
-            $currentUser = Auth::getCurrentUser();
+            $currentUser = HybridAuth::getCurrentUser();
 
             // Get query parameters
             $view = $_GET['view'] ?? 'my'; // 'my', 'all', or 'unassigned'
@@ -595,10 +613,10 @@ class DriverUpdatesController
                 $params['dispatcher_id'] = $currentUser->id;
             } elseif ($view === 'unassigned') {
                 $sql .= " AND (assigned_dispatcher_id IS NULL OR assigned_dispatcher_id = '')";
-            } elseif (is_numeric($view)) {
-                // View is a dispatcher ID
+            } elseif ($view !== 'all' && $view !== 'my' && $view !== 'unassigned' && !empty($view)) {
+                // View is a dispatcher ID (UUID or legacy int)
                 $sql .= " AND assigned_dispatcher_id = :dispatcher_id";
-                $params['dispatcher_id'] = (int)$view;
+                $params['dispatcher_id'] = $view;
             }
             // For 'all' view, no additional filter is applied
 

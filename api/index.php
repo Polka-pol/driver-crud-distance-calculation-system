@@ -41,9 +41,12 @@ use App\Controllers\DispatcherDashboardController;
 use App\Controllers\DriverController;
 use App\Controllers\DriverUpdatesController;
 use App\Controllers\SettingsController;
-use App\Core\Auth;
+use App\Core\HybridAuth;
 use App\Controllers\RbacController;
 use App\Core\Authz;
+use App\Controllers\UserManagementController;
+
+require_once __DIR__ . '/src/Controllers/UserManagementController.php';
 
 // --- Headers ---
 // Set common headers for the API response.
@@ -123,6 +126,18 @@ if ($apiRoute === '/login' && $requestMethod === 'POST') {
     exit();
 }
 
+// Route for MySQL login (for migration to Supabase)
+if ($apiRoute === '/auth/mysql-login' && $requestMethod === 'POST') {
+    AuthController::mysqlLogin();
+    exit();
+}
+
+// Route for updating Supabase user ID after migration
+if ($apiRoute === '/auth/update-supabase-id' && $requestMethod === 'POST') {
+    AuthController::updateSupabaseId();
+    exit();
+}
+
 // Driver authentication routes (no auth required)
 if ($apiRoute === '/driver/login' && $requestMethod === 'POST') {
     DriverController::login();
@@ -173,7 +188,7 @@ if ($apiRoute === '/settings/timezone' && $requestMethod === 'GET') {
 
 // Settings: update active timezone (admin only)
 if ($apiRoute === '/settings/timezone' && $requestMethod === 'PUT') {
-    Auth::protect();
+    HybridAuth::protect();
     App\Core\Authz::require('settings.timezone.update');
     SettingsController::updateTimezone();
     exit();
@@ -187,7 +202,7 @@ if ($apiRoute === '/server-time' && $requestMethod === 'GET') {
 
 // Settings: get last timezone change
 if ($apiRoute === '/settings/timezone/last-change' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('settings.timezone.view');
     SettingsController::getTimezoneLastChange();
     exit();
@@ -199,7 +214,7 @@ if (preg_match('/^\/trucks(\/(\d+))?\/?$/', $apiRoute, $matches)) {
     $id = isset($matches[2]) ? (int)$matches[2] : null;
     
     // All truck routes require authentication; permissions validated per action
-    Auth::protect();
+    HybridAuth::protect();
 
     if ($id) {
         // Routes that require an ID
@@ -225,7 +240,7 @@ if (preg_match('/^\/trucks(\/(\d+))?\/?$/', $apiRoute, $matches)) {
 
 // Route for updating a truck via POST
 if ($apiRoute === '/trucks/update' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     App\Core\Authz::require('trucks.update');
     TruckController::updateViaPost();
     exit();
@@ -233,7 +248,7 @@ if ($apiRoute === '/trucks/update' && $requestMethod === 'POST') {
 
 // Route for creating a truck via POST
 if ($apiRoute === '/trucks/create' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     App\Core\Authz::require('trucks.create');
     TruckController::create();
     exit();
@@ -241,7 +256,7 @@ if ($apiRoute === '/trucks/create' && $requestMethod === 'POST') {
 
 // Route for deleting a truck via POST
 if ($apiRoute === '/trucks/delete' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     App\Core\Authz::require('trucks.delete');
     TruckController::deleteViaPost();
     exit();
@@ -249,7 +264,7 @@ if ($apiRoute === '/trucks/delete' && $requestMethod === 'POST') {
 
 // Route for getting trucks with coordinates for map
 if ($apiRoute === '/trucks/map' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('trucks.map.view');
     TruckController::getForMap();
     exit();
@@ -261,7 +276,7 @@ if (preg_match('/^\/trucks\/(\d+)\/location-history$/', $apiRoute, $matches) && 
     $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
     
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('trucks.history.read');
     TruckController::getLocationHistory($truckId, $page, $limit);
     exit();
@@ -273,7 +288,7 @@ if (preg_match('/^\/trucks\/(\d+)\/activity-history$/', $apiRoute, $matches) && 
     $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
     
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('trucks.history.read');
     TruckController::getTruckActivityHistory($truckId, $page, $limit);
     exit();
@@ -282,7 +297,7 @@ if (preg_match('/^\/trucks\/(\d+)\/activity-history$/', $apiRoute, $matches) && 
 // Route for getting truck location history count
 if (preg_match('/^\/trucks\/(\d+)\/location-history\/count$/', $apiRoute, $matches) && $requestMethod === 'GET') {
     $truckId = (int)$matches[1];
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('trucks.history.read');
     TruckController::getLocationHistoryCount($truckId);
     exit();
@@ -292,7 +307,7 @@ if (preg_match('/^\/trucks\/(\d+)\/location-history\/count$/', $apiRoute, $match
 // Route for placing a hold on a truck
 if (preg_match('/^\/trucks\/(\d+)\/hold$/', $apiRoute, $matches)) {
     $truckId = (int)$matches[1];
-    Auth::protect();
+    HybridAuth::protect();
     
     if ($requestMethod === 'POST') {
         App\Core\Authz::require('trucks.hold.manage');
@@ -329,7 +344,7 @@ if (preg_match('/^\/trucks\/(\d+)\/hold$/', $apiRoute, $matches)) {
 
 // Route for cleaning up expired holds
 if ($apiRoute === '/trucks/hold/cleanup' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('trucks.hold.manage');
     TruckController::cleanupExpiredHolds();
     exit();
@@ -337,7 +352,7 @@ if ($apiRoute === '/trucks/hold/cleanup' && $requestMethod === 'GET') {
 
 // Route for getting server time and hold countdowns
 if ($apiRoute === '/trucks/hold/time' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::requireAny(['trucks.hold.manage','trucks.read']);
     TruckController::getServerTimeAndHolds();
     exit();
@@ -346,7 +361,7 @@ if ($apiRoute === '/trucks/hold/time' && $requestMethod === 'GET') {
 // Route for the new smart search
 if ($apiRoute === '/search' && $requestMethod === 'GET') {
     // Allow all authenticated users to use address search (no role restriction)
-    Auth::protect();
+    HybridAuth::protect();
     SearchController::search();
     exit();
 }
@@ -354,14 +369,14 @@ if ($apiRoute === '/search' && $requestMethod === 'GET') {
 // Route for checking recent searches by other users
 if ($apiRoute === '/search/recent' && $requestMethod === 'GET') {
     // Allow all authenticated users to check recent searches
-    Auth::protect();
+    HybridAuth::protect();
     SearchController::getRecentSearches();
     exit();
 }
 
 // Route for reverse geocoding (coordinates to address) - PROTECTED FOR DISPATCHERS
 if ($apiRoute === '/search/reverse' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('search.reverse');
     SearchController::reverseGeocode();
     exit();
@@ -375,7 +390,7 @@ if ($apiRoute === '/driver/reverse-geocode' && $requestMethod === 'GET') {
 
 // Route for calculating distance
 if ($apiRoute === '/distance' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('distance.process');
     DistanceController::process();
     exit();
@@ -383,7 +398,7 @@ if ($apiRoute === '/distance' && $requestMethod === 'POST') {
 
 // Route for batch processing distance
 if ($apiRoute === '/distance/batch' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('distance.batch');
     DistanceController::batchProcess();
     exit();
@@ -391,7 +406,7 @@ if ($apiRoute === '/distance/batch' && $requestMethod === 'POST') {
 
 // Route for distance cache check
 if ($apiRoute === '/distance/cache-check' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('distance.cache.check');
     (new App\Controllers\DistanceController())->checkCacheBatch();
     exit();
@@ -399,7 +414,7 @@ if ($apiRoute === '/distance/cache-check' && $requestMethod === 'POST') {
 
 // Route for logging distance statistics
 if ($apiRoute === '/distance/log-stats' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('distance.cache.log');
     (new App\Controllers\DistanceController())->logStats();
     exit();
@@ -407,14 +422,14 @@ if ($apiRoute === '/distance/log-stats' && $requestMethod === 'POST') {
 
 // User Management Routes (Protected for admins only)
 if ($apiRoute === '/users' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('users.manage');
     UserController::getAll();
     exit();
 }
 
 if ($apiRoute === '/users' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('users.manage');
     UserController::create();
     exit();
@@ -422,7 +437,7 @@ if ($apiRoute === '/users' && $requestMethod === 'POST') {
 
 if (preg_match('/^\/users\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 'PUT') {
     $id = (int)$matches[1];
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('users.manage');
     UserController::update($id);
     exit();
@@ -430,7 +445,7 @@ if (preg_match('/^\/users\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 
 
 if (preg_match('/^\/users\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 'DELETE') {
     $id = (int)$matches[1];
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('users.manage');
     UserController::delete($id);
     exit();
@@ -438,7 +453,7 @@ if (preg_match('/^\/users\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 
 
 // Get Dispatchers Route (Protected for dispatchers, managers, admins)
 if ($apiRoute === '/users/dispatchers' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('users.dispatchers.read');
     UserController::getDispatchers();
     exit();
@@ -446,7 +461,7 @@ if ($apiRoute === '/users/dispatchers' && $requestMethod === 'GET') {
 
 // Analytics Route (Protected)
 if ($apiRoute === '/dashboard/analytics' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('dashboard.analytics.view');
     DashboardController::getAnalytics();
     exit();
@@ -454,7 +469,7 @@ if ($apiRoute === '/dashboard/analytics' && $requestMethod === 'GET') {
 
 // Dispatcher Dashboard Route (Protected for dispatchers, managers, admins)
 if ($apiRoute === '/dispatcher/dashboard' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('dashboard.dispatcher.view');
     DispatcherDashboardController::getDashboardData();
     exit();
@@ -462,7 +477,7 @@ if ($apiRoute === '/dispatcher/dashboard' && $requestMethod === 'GET') {
 
 // Session Management Route (Admins only)
 if ($apiRoute === '/dashboard/session-management' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('sessions.manage');
     DashboardController::getSessionManagement();
     exit();
@@ -470,7 +485,7 @@ if ($apiRoute === '/dashboard/session-management' && $requestMethod === 'GET') {
 
 // Logout User Route (Admins only)
 if ($apiRoute === '/dashboard/logout-user' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('sessions.manage');
     DashboardController::logoutUser();
     exit();
@@ -478,7 +493,7 @@ if ($apiRoute === '/dashboard/logout-user' && $requestMethod === 'POST') {
 
 // RBAC audit logs
 if ($apiRoute === '/dashboard/rbac-logs' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('rbac.roles.manage');
     DashboardController::getRbacLogs();
     exit();
@@ -520,7 +535,7 @@ if ($apiRoute === '/driver/status' && $requestMethod === 'POST') {
 // Bulk distance calculation for new load
 if (preg_match('/^\/loads\/(\d+)\/calculate-distances$/', $apiRoute, $matches) && $requestMethod === 'POST') {
     $loadId = (int)$matches[1];
-    Auth::protect();
+    HybridAuth::protect();
     App\Core\Authz::require('distance.batch');
     (new DistanceController())->calculateDistancesForLoad($loadId);
     exit();
@@ -528,7 +543,7 @@ if (preg_match('/^\/loads\/(\d+)\/calculate-distances$/', $apiRoute, $matches) &
 
 // Distance cache statistics
 if ($apiRoute === '/distances/cache-stats' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     App\Core\Authz::require('distance.cache.stats');
     (new DistanceController())->getCacheStats();
     exit();
@@ -536,7 +551,7 @@ if ($apiRoute === '/distances/cache-stats' && $requestMethod === 'GET') {
 
 // Clear distance cache
 if ($apiRoute === '/distances/cache-cleanup' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     App\Core\Authz::require('distance.cache.cleanup');
     (new DistanceController())->cleanupCache();
     exit();
@@ -546,7 +561,7 @@ if ($apiRoute === '/distances/cache-cleanup' && $requestMethod === 'POST') {
 
 // Get driver update statuses (Daily Updates and Monthly Review)
 if ($apiRoute === '/driver-updates/status' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('driver.updates.view');
     DriverUpdatesController::getDriverStatuses();
     exit();
@@ -555,7 +570,7 @@ if ($apiRoute === '/driver-updates/status' && $requestMethod === 'GET') {
 // Update driver no_need_update status
 if (preg_match('/^\/trucks\/(\d+)\/update-no-need-status$/', $apiRoute, $matches) && $requestMethod === 'POST') {
     $truckId = (int)$matches[1];
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('driver.updates.modify');
     DriverUpdatesController::updateNoNeedStatus($truckId);
     exit();
@@ -564,7 +579,7 @@ if (preg_match('/^\/trucks\/(\d+)\/update-no-need-status$/', $apiRoute, $matches
 // Clear driver no_need_update status
 if (preg_match('/^\/trucks\/(\d+)\/clear-no-need-status$/', $apiRoute, $matches) && $requestMethod === 'POST') {
     $truckId = (int)$matches[1];
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('driver.updates.modify');
     DriverUpdatesController::clearNoNeedStatus($truckId);
     exit();
@@ -572,7 +587,7 @@ if (preg_match('/^\/trucks\/(\d+)\/clear-no-need-status$/', $apiRoute, $matches)
 
 // Auto-update driver statuses when page loads
 if ($apiRoute === '/driver-updates/auto-update' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('driver.updates.modify');
     DriverUpdatesController::autoUpdateDriverStatuses();
     exit();
@@ -580,7 +595,7 @@ if ($apiRoute === '/driver-updates/auto-update' && $requestMethod === 'POST') {
 
 // Get driver updates heatmap data
 if ($apiRoute === '/driver-updates/heatmap' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('driver.updates.view');
     DriverUpdatesController::getDriverUpdatesHeatmap();
     exit();
@@ -588,49 +603,49 @@ if ($apiRoute === '/driver-updates/heatmap' && $requestMethod === 'GET') {
 
 // === RBAC MANAGEMENT ENDPOINTS ===
 if ($apiRoute === '/rbac/permissions' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('rbac.permissions.manage');
     RbacController::getPermissionsCatalog();
     exit();
 }
 
 if ($apiRoute === '/rbac/roles' && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('rbac.roles.manage');
     RbacController::getRoles();
     exit();
 }
 
 if ($apiRoute === '/rbac/roles' && $requestMethod === 'POST') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('rbac.roles.manage');
     RbacController::createRole();
     exit();
 }
 
 if (preg_match('/^\/rbac\/roles\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 'PUT') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('rbac.roles.manage');
     RbacController::updateRole((int)$matches[1]);
     exit();
 }
 
 if (preg_match('/^\/rbac\/roles\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 'DELETE') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('rbac.roles.manage');
     RbacController::deleteRole((int)$matches[1]);
     exit();
 }
 
 if (preg_match('/^\/rbac\/roles\/(\d+)\/permissions$/', $apiRoute, $matches) && $requestMethod === 'GET') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('rbac.permissions.manage');
     RbacController::getRolePermissions((int)$matches[1]);
     exit();
 }
 
 if (preg_match('/^\/rbac\/roles\/(\d+)\/permissions$/', $apiRoute, $matches) && $requestMethod === 'PUT') {
-    Auth::protect();
+    HybridAuth::protect();
     Authz::require('rbac.permissions.manage');
     RbacController::setRolePermissions((int)$matches[1]);
     exit();
@@ -674,6 +689,50 @@ if ($apiRoute === '/driver/chat/send' && $requestMethod === 'POST') {
 if (preg_match('/^\/driver\/offers\/(\d+)\/messages$/', $apiRoute, $matches) && $requestMethod === 'GET') {
     $offerId = (int)$matches[1];
     DriverController::getChatMessages($offerId);
+    exit();
+}
+
+// === USER MANAGEMENT ENDPOINTS ===
+if ($apiRoute === '/admin/users' && $requestMethod === 'GET') {
+    HybridAuth::protect();
+    $userManagement = new UserManagementController();
+    $result = $userManagement->listUsers();
+    echo json_encode($result);
+    exit();
+}
+
+if ($apiRoute === '/admin/users' && $requestMethod === 'POST') {
+    HybridAuth::protect();
+    $userManagement = new UserManagementController();
+    $result = $userManagement->createUser();
+    echo json_encode($result);
+    exit();
+}
+
+if (preg_match('/^\/admin\/users\/([a-f0-9-]+)$/', $apiRoute, $matches) && $requestMethod === 'PUT') {
+    HybridAuth::protect();
+    $userId = $matches[1];
+    $userManagement = new UserManagementController();
+    $result = $userManagement->updateUser($userId);
+    echo json_encode($result);
+    exit();
+}
+
+if (preg_match('/^\/admin\/users\/([a-f0-9-]+)$/', $apiRoute, $matches) && $requestMethod === 'DELETE') {
+    HybridAuth::protect();
+    $userId = $matches[1];
+    $userManagement = new UserManagementController();
+    $result = $userManagement->deleteUser($userId);
+    echo json_encode($result);
+    exit();
+}
+
+if (preg_match('/^\/admin\/users\/([a-f0-9-]+)\/password$/', $apiRoute, $matches) && $requestMethod === 'PUT') {
+    HybridAuth::protect();
+    $userId = $matches[1];
+    $userManagement = new UserManagementController();
+    $result = $userManagement->changePassword($userId);
+    echo json_encode($result);
     exit();
 }
 

@@ -87,4 +87,69 @@ class AuthController
         ActivityLogger::log('user_login_failure', ['username' => $username, 'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown']);
         self::sendResponse(['success' => false, 'message' => 'Invalid username or password.'], 401);
     }
+
+    /**
+     * MySQL login for migration to Supabase
+     */
+    public static function mysqlLogin()
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        if (!isset($data['username']) || !isset($data['password'])) {
+            self::sendResponse(['success' => false, 'message' => 'Username and password are required.'], 400);
+            return;
+        }
+
+        $user = User::findByUsername($data['username']);
+
+        if (!$user || !$user['is_active']) {
+            self::sendResponse(['success' => false, 'message' => 'User not found or inactive.'], 401);
+            return;
+        }
+
+        // Check password (assuming plain text for now, will be migrated to Supabase)
+        if ($user['password'] !== $data['password']) {
+            self::handleFailedLogin($data['username']);
+            return;
+        }
+
+        // Return user data for migration
+        self::sendResponse([
+            'success' => true,
+            'user' => [
+                'id' => $user['id'],
+                'username' => $user['username'],
+                'email' => $user['email'],
+                'full_name' => $user['full_name'],
+                'role' => $user['role'],
+                'supabase_user_id' => $user['supabase_user_id']
+            ]
+        ]);
+    }
+
+    /**
+     * Update MySQL user with Supabase user ID after migration
+     */
+    public static function updateSupabaseId()
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        if (!isset($data['mysql_user_id']) || !isset($data['supabase_user_id'])) {
+            self::sendResponse(['success' => false, 'message' => 'MySQL user ID and Supabase user ID are required.'], 400);
+            return;
+        }
+
+        try {
+            $updated = User::updateSupabaseId($data['mysql_user_id'], $data['supabase_user_id']);
+            
+            if ($updated) {
+                self::sendResponse(['success' => true, 'message' => 'Supabase ID updated successfully.']);
+            } else {
+                self::sendResponse(['success' => false, 'message' => 'Failed to update Supabase ID.'], 500);
+            }
+        } catch (\Exception $e) {
+            Logger::error('Failed to update Supabase ID', ['error' => $e->getMessage()]);
+            self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
+        }
+    }
 }

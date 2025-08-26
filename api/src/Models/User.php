@@ -27,4 +27,27 @@ class User
             return false;
         }
     }
+
+    /**
+     * Update user with Supabase user ID after migration.
+     *
+     * @param int $mysqlUserId The MySQL user ID.
+     * @param string $supabaseUserId The Supabase user ID.
+     * @return bool True if updated successfully, false otherwise.
+     */
+    public static function updateSupabaseId(int $mysqlUserId, string $supabaseUserId)
+    {
+        try {
+            $pdo = Database::getConnection();
+            $stmt = $pdo->prepare("UPDATE users SET supabase_user_id = :supabase_user_id WHERE id = :id");
+            $result = $stmt->execute([
+                'supabase_user_id' => $supabaseUserId,
+                'id' => $mysqlUserId
+            ]);
+            return $result && $stmt->rowCount() > 0;
+        } catch (PDOException $e) {
+            Logger::error('Database error in updateSupabaseId', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
 }

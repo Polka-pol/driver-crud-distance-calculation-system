@@ -5,6 +5,7 @@ namespace App\Core;
 use PDO;
 use App\Core\Database;
 use App\Core\Logger;
+use App\Core\HybridAuth;
 
 class Authz
 {
@@ -47,7 +48,7 @@ class Authz
      */
     public static function can(string $permissionKey): bool
     {
-        $user = Auth::getCurrentUser();
+        $user = HybridAuth::getCurrentUser();
         if (!$user || empty($user->role)) {
             return false;
         }
@@ -109,7 +110,7 @@ class Authz
      */
     public static function getCurrentUserPermissions(): array
     {
-        $user = Auth::getCurrentUser();
+        $user = HybridAuth::getCurrentUser();
         if (!$user || empty($user->role)) {
             return [];
         }

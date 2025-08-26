@@ -3,7 +3,7 @@
 namespace App\Controllers;
 
 use App\Core\Database;
-use App\Core\Auth;
+use App\Core\HybridAuth;
 use App\Core\Logger;
 use App\Core\EDTTimeConverter;
 use PDO;
@@ -50,10 +50,11 @@ class DispatcherDashboardController
 
             // Original logic for single dispatcher
             $selectedDispatcherId = $_GET['dispatcher_id'] ?? null;
-            $currentUser = Auth::getCurrentUser();
+            $currentUser = HybridAuth::getCurrentUser();
 
             if (!$selectedDispatcherId && $currentUser) {
-                $selectedDispatcherId = $currentUser->id;
+                // Prefer numeric MySQL ID when available (Supabase users are synced in HybridAuth)
+                $selectedDispatcherId = $currentUser->mysql_user_id ?? $currentUser->id;
             }
 
             // Get monthly calendar data for selected dispatcher

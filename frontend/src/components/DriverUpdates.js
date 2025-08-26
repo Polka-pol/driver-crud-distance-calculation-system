@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './DriverUpdates.css';
 import { apiClient } from '../utils/apiClient';
+import supabase from '../supabaseClient';
 import { API_BASE_URL } from '../config';
 import UpdateStatusModal from './UpdateStatusModal';
 import CopyNumbersModal from './CopyNumbersModal';
@@ -34,15 +35,27 @@ const DriverUpdates = ({ onBack, user, serverTimeOffset = 0 }) => {
     const [driversToCopy, setDriversToCopy] = useState([]);
     const [isViewInitialized, setIsViewInitialized] = useState(false);
 
-    // Initialize default view based on user role
     useEffect(() => {
-        if (user) {
-            if (user.role === 'dispatcher') {
-                setView(user.id.toString()); // Default to current dispatcher ID for dispatchers
+        const initializeView = async () => {
+            let initialView = 'all';
+            console.log('DriverUpdates DEBUG - Initializing view for user:', user);
+            if (user && user.role === 'dispatcher') {
+                try {
+                    const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+                    console.log('DriverUpdates DEBUG - Supabase user:', supabaseUser);
+                    if (supabaseUser) {
+                        initialView = supabaseUser.id;
+                        console.log('DriverUpdates DEBUG - Setting view to dispatcher UUID:', initialView);
+                    }
+                } catch (error) {
+                    console.error("Failed to get Supabase user for view initialization, defaulting to 'all'.", error);
+                }
             }
-            // For admin and manager roles, keep the default 'all' value
+            console.log('DriverUpdates DEBUG - Final initialView:', initialView);
+            setView(initialView);
             setIsViewInitialized(true);
-        }
+        };
+        initializeView();
     }, [user]);
 
     // Fetch dispatchers on component mount
@@ -100,6 +113,7 @@ const DriverUpdates = ({ onBack, user, serverTimeOffset = 0 }) => {
             await autoUpdateDriverStatuses();
             
             // Then load the updated data
+            console.log('DriverUpdates DEBUG - Loading data with view:', view, 'activeTab:', activeTab);
             const response = await apiClient(`${API_BASE_URL}/driver-updates/status?tab=${activeTab}&view=${view}`);
             const data = await response.json();
             

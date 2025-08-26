@@ -14,6 +14,7 @@
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 0.9rem;
+  table-layout: fixed !important;
 }
 
 /* Base column styles */
@@ -27,6 +28,7 @@
   max-height: 42px;
   overflow: hidden;
   border-bottom: 1px solid #e2e8f0;
+  box-sizing: border-box;
 }
 
 .styled-table td {
@@ -83,6 +85,7 @@
 .styled-table .col-when { 
   width: 75px; 
   min-width: 75px;
+  max-width: 75px;
 }
 
 .styled-table .col-driver { 
@@ -157,6 +160,27 @@
 
 .styled-table td.col-when {
   text-align: center;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  line-height: 1.1;
+  font-size: 0.75rem;
+}
+
+.styled-table td.col-when strong {
+  font-size: 12.4px;
+  font-weight: 600;
+  color: #1a202c;
+  display: block;
+  line-height: 1.1;
+}
+
+.styled-table td.col-when br + * {
+  font-size: 0.65rem;
+  color: #4a5568;
+  display: block;
+  line-height: 1.1;
+  margin-top: 0;
 }
 
 .styled-table td.col-driver {
@@ -323,6 +347,10 @@
 .styled-table td:nth-child(5) { 
   width: 75px; 
   min-width: 75px; 
+  max-width: 75px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 
 .styled-table th:nth-child(6),
@@ -958,4 +986,70 @@
 
 .mobile-detail-row .loads-mark-value {
   font-size: 11px;
+} 
+
+/* Ensure fixed column widths are strictly enforced */
+.styled-table .col-when,
+.styled-table th:nth-child(5),
+.styled-table td:nth-child(5),
+.styled-table th.col-when,
+.styled-table td.col-when {
+  width: 75px !important;
+  min-width: 75px !important;
+  max-width: 75px !important;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+
+/* Override any responsive table behavior for all screen sizes */
+@media (min-width: 1200px) {
+  .styled-table .col-when,
+  .styled-table th:nth-child(5),
+  .styled-table td:nth-child(5) {
+    width: 75px !important;
+    min-width: 75px !important;
+    max-width: 75px !important;
+  }
+}
+
+@media (min-width: 1360px) {
+  .styled-table .col-when,
+  .styled-table th:nth-child(5),
+  .styled-table td:nth-child(5) {
+    width: 75px !important;
+    min-width: 75px !important;
+    max-width: 75px !important;
+  }
+}
+
+@media (min-width: 1440px) {
+  .styled-table .col-when,
+  .styled-table th:nth-child(5),
+  .styled-table td:nth-child(5) {
+    width: 75px !important;
+    min-width: 75px !important;
+    max-width: 75px !important;
+  }
+}
+
+@media (min-width: 1920px) {
+  .styled-table .col-when,
+  .styled-table th:nth-child(5),
+  .styled-table td:nth-child(5) {
+    width: 75px !important;
+    min-width: 75px !important;
+    max-width: 75px !important;
+  }
+} 
+
+/* Prevent any table column resizing */
+.styled-table * {
+  box-sizing: border-box;
+}
+
+.styled-table th,
+.styled-table td {
+  box-sizing: border-box;
+  overflow: hidden;
 } 

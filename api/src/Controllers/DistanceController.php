@@ -13,7 +13,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Exception;
 use PDO;
-use App\Core\Auth;
+use App\Core\HybridAuth;
 use App\Core\MapboxTokenException;
 use App\Core\MapboxRateLimitException;
 
@@ -448,19 +448,24 @@ class DistanceController
             return;
         }
 
-        $user = Auth::getCurrentUser();
-        if (!$user || !isset($user->id)) {
+        $user = \App\Core\HybridAuth::getCurrentUser();
+        if (!$user) {
             Logger::warning('Could not log distance stats, user not found in session.');
             return;
         }
 
-        $sql = "INSERT INTO distance_log (user_id, source_address, total_origins, cache_hits, mapbox_requests, created_at)
-                VALUES (:user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests, :created_at)";
+        // Get both MySQL ID and Supabase UUID
+        $userId = \App\Core\UserService::getMysqlId($user);
+        $supabaseUserId = \App\Core\UserService::getSupabaseId($user);
+
+        $sql = "INSERT INTO distance_log (user_id, supabase_user_id, source_address, total_origins, cache_hits, mapbox_requests, created_at)
+                VALUES (:user_id, :supabase_user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests, :created_at)";
 
         try {
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([
-                ':user_id' => $user->id,
+                ':user_id' => $userId,
+                ':supabase_user_id' => $supabaseUserId,
                 ':source_address' => $destination,
                 ':total_origins' => $totalOrigins,
                 ':cache_hits' => $cacheHits,
@@ -841,31 +846,14 @@ class DistanceController
     private function backgroundStatsLogging(array $stats): void
     {
         try {
-            $user = Auth::getCurrentUser();
-            if (!$user || !isset($user->id)) {
+            $user = \App\Core\HybridAuth::getCurrentUser();
+            if (!$user) {
                 return;
             }
 
-            // Skip logging to distance_log here - will be handled by frontend's log-stats call
-            // $this->logDistanceStats(
-            //     $stats['destination'],
-            //     $stats['total_drivers'],
-            //     $stats['cache_hits'],
-            //     $stats['uncached_count']
-            // );
-
-            // Skip logging to activity_logs here too - will be handled by frontend's log-stats call
-            // $successfulDrivers = $stats['total_drivers'] - $stats['geocoding_failures'];
-            // ActivityLogger::log('distance_batch_calculated', [
-            //     'destination' => $stats['destination'],
-            //     'total_drivers' => $stats['total_drivers'],
-            //     'cache_hits' => $stats['cache_hits'],
-            //     'mapbox_requests' => $stats['uncached_count'],
-            //     'geocoding_failures' => $stats['geocoding_failures'],
-            //     'cache_efficiency_percent' => $successfulDrivers > 0 ?
-            //         round(($stats['cache_hits'] / $successfulDrivers) * 100, 1) : 0,
-            //     'query_type' => 'cache_check_with_stats'
-            // ]);
+            // Skip backend logging - frontend will log accurate stats via logStats() endpoint
+            // Backend doesn't have accurate mapbox_requests count (only uncached_count)
+            // Frontend has the real breakdown: cache_hits + preliminary_calculations + mapbox_requests
         } catch (Exception $e) {
             // Even if logging fails, don't impact user experience
             Logger::error("Background stats logging failed", [
@@ -1123,7 +1111,7 @@ class DistanceController
      */
     public function calculateDistancesForLoad($loadId)
     {
-        Auth::protect(['dispatcher', 'manager', 'admin']);
+        HybridAuth::protect(['dispatcher', 'manager', 'admin']);
 
         try {
             // Get load data
@@ -1314,7 +1302,7 @@ class DistanceController
      */
     public function getCacheStats()
     {
-        Auth::protect(['dispatcher', 'manager', 'admin']);
+        HybridAuth::protect(['dispatcher', 'manager', 'admin']);
 
         try {
             $stmt = $this->pdo->prepare("
@@ -1347,7 +1335,7 @@ class DistanceController
      */
     public function cleanupCache()
     {
-        Auth::protect(['admin']);
+        HybridAuth::protect(['admin']);
 
         try {
             $stmt = $this->pdo->prepare("
@@ -1451,7 +1439,7 @@ class DistanceController
      */
     public function logStats()
     {
-        Auth::protect(['dispatcher', 'manager', 'admin']);
+        HybridAuth::protect(['dispatcher', 'manager', 'admin']);
 
         $input = json_decode(file_get_contents('php://input'), true);
 
@@ -1468,20 +1456,25 @@ class DistanceController
         $mapboxRequests = $input['mapbox_requests'] ?? 0;
 
         try {
-            $user = Auth::getCurrentUser();
-            if (!$user || !isset($user->id)) {
+            $user = \App\Core\HybridAuth::getCurrentUser();
+            if (!$user) {
                 http_response_code(401);
                 echo json_encode(['error' => 'User not authenticated']);
                 return;
             }
 
+            // Get both MySQL ID and Supabase UUID
+            $userId = \App\Core\UserService::getMysqlId($user);
+            $supabaseUserId = \App\Core\UserService::getSupabaseId($user);
+
             // Log to distance_log table with correct mapbox_requests count
-            $sql = "INSERT INTO distance_log (user_id, source_address, total_origins, cache_hits, mapbox_requests, created_at)
-                    VALUES (:user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests, :created_at)";
+            $sql = "INSERT INTO distance_log (user_id, supabase_user_id, source_address, total_origins, cache_hits, mapbox_requests, created_at)
+                    VALUES (:user_id, :supabase_user_id, :source_address, :total_origins, :cache_hits, :mapbox_requests, :created_at)";
 
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([
-                ':user_id' => $user->id,
+                ':user_id' => $userId,
+                ':supabase_user_id' => $supabaseUserId,
                 ':source_address' => $destination,
                 ':total_origins' => $totalDrivers,
                 ':cache_hits' => $cacheHits,
