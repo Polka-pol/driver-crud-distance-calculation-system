@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { parseAppTzDateTimeToEpochMs } from '../utils/timeUtils';
+import { parseAppTzDateTimeToEpochMs, getCurrentTimeInAppTZ } from '../utils/timeUtils';
 
 const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpired, serverTimeOffset = 0 }) => {
   // Component for displaying hold status and countdown timer using EDT timezone
@@ -26,29 +26,15 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
       return;
     }
 
-    // Parse server UTC naive timestamp ("YYYY-MM-DD HH:mm:ss") robustly as UTC
-    const safeParseUtcNaiveToEpochMs = (value) => {
-      if (!value) return NaN;
-      const str = String(value).trim();
-      if (!str) return NaN;
-      const iso = str.includes('T') ? str : str.replace(' ', 'T');
-      const withZ = /Z$/i.test(iso) || /[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
-      const ms = Date.parse(withZ);
-      return Number.isNaN(ms) ? NaN : ms;
-    };
-
-    // Prefer strict UTC parse; fall back to App TZ parser if needed
-    let startEpoch = safeParseUtcNaiveToEpochMs(truck.hold_started_at);
-    if (!Number.isFinite(startEpoch)) {
-      startEpoch = parseAppTzDateTimeToEpochMs(truck.hold_started_at);
-    }
+    // Parse hold start time using existing timeUtils
+    const startEpoch = parseAppTzDateTimeToEpochMs(truck.hold_started_at);
     if (!Number.isFinite(startEpoch)) {
       setTimeLeft('Invalid');
       return;
     }
 
-    // Compute initial remaining synchronously to avoid scheduling timers when already expired
-    const now0 = Date.now() + (Number.isFinite(serverTimeOffset) ? serverTimeOffset : 0);
+    // Compute initial remaining using server-synchronized time
+    const now0 = getCurrentTimeInAppTZ(serverTimeOffset).getTime();
     const elapsed0 = Math.max(0, now0 - startEpoch);
     const remaining0 = Math.max(0, 15 * 60 * 1000 - elapsed0);
     if (remaining0 <= 0) {
@@ -62,8 +48,8 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
     }
 
     const update = () => {
-      // Use UTC epoch math plus server offset (robust across client timezones)
-      const nowMs = Date.now() + (Number.isFinite(serverTimeOffset) ? serverTimeOffset : 0);
+      // Use server-synchronized time for accurate countdown
+      const nowMs = getCurrentTimeInAppTZ(serverTimeOffset).getTime();
       const elapsedMs = Math.max(0, nowMs - startEpoch);
       const remainingMs = Math.max(0, 15 * 60 * 1000 - elapsedMs);
 
@@ -94,7 +80,7 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
     setTimeLeft(`${minutes0}:${seconds0.toString().padStart(2, '0')}`);
 
     // Align next tick to the next second to reduce drift, then tick every 1s
-    const now = Date.now() + (Number.isFinite(serverTimeOffset) ? serverTimeOffset : 0);
+    const now = getCurrentTimeInAppTZ(serverTimeOffset).getTime();
     const msToNextSecond = 1000 - (now % 1000);
     const startAligned = setTimeout(() => {
       update();

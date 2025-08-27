@@ -44,6 +44,8 @@ use App\Controllers\SettingsController;
 use App\Core\Auth;
 use App\Controllers\RbacController;
 use App\Core\Authz;
+use App\Controllers\OfferController;
+use App\Controllers\ChatController;
 
 // --- Headers ---
 // Set common headers for the API response.
@@ -674,6 +676,73 @@ if ($apiRoute === '/driver/chat/send' && $requestMethod === 'POST') {
 if (preg_match('/^\/driver\/offers\/(\d+)\/messages$/', $apiRoute, $matches) && $requestMethod === 'GET') {
     $offerId = (int)$matches[1];
     DriverController::getChatMessages($offerId);
+    exit();
+}
+
+// === OFFERS SYSTEM ROUTES ===
+
+// Create new offer
+if ($apiRoute === '/offers' && $requestMethod === 'POST') {
+    OfferController::create();
+    exit();
+}
+
+// Get all offers for user
+if ($apiRoute === '/offers' && $requestMethod === 'GET') {
+    OfferController::getOffers();
+    exit();
+}
+
+// Get specific offer details
+if (preg_match('/^\/offers\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+    $offerId = (int)$matches[1];
+    OfferController::getOffer($offerId);
+    exit();
+}
+
+// Submit driver proposal
+if ($apiRoute === '/offers/proposal' && $requestMethod === 'POST') {
+    OfferController::submitProposal();
+    exit();
+}
+
+// Update offer status
+if ($apiRoute === '/offers/status' && $requestMethod === 'PUT') {
+    OfferController::updateStatus();
+    exit();
+}
+
+// === CHAT SYSTEM ROUTES ===
+
+// Get chat messages for offer
+if (preg_match('/^\/chat\/(\d+)\/messages$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+    $offerId = (int)$matches[1];
+    ChatController::getMessages($offerId);
+    exit();
+}
+
+// Send chat message
+if ($apiRoute === '/chat/send' && $requestMethod === 'POST') {
+    ChatController::sendMessage();
+    exit();
+}
+
+// Mark messages as read
+if ($apiRoute === '/chat/read' && $requestMethod === 'POST') {
+    ChatController::markAsRead();
+    exit();
+}
+
+// Get unread message count
+if ($apiRoute === '/chat/unread-count' && $requestMethod === 'GET') {
+    ChatController::getUnreadCount();
+    exit();
+}
+
+// Get chat participants
+if (preg_match('/^\/chat\/(\d+)\/participants$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+    $offerId = (int)$matches[1];
+    ChatController::getParticipants($offerId);
     exit();
 }
 

@@ -53,6 +53,13 @@ export async function calculateDistancesForDrivers(destination, onDistancesUpdat
     const totalStartTime = performance.now();
 
     try {
+        // Phase 0: Clean up expired holds before processing
+        try {
+            await apiClient(`${API_BASE_URL}/trucks/hold/cleanup`);
+        } catch (cleanupError) {
+            console.warn('Hold cleanup failed during distance calculation:', cleanupError.message);
+        }
+        
         // Phase 1: Fast cache check (backend fetches truck addresses from DB)
         const cacheStartTime = performance.now();
         const cacheResponse = await apiClient(`${API_BASE_URL}/distance/cache-check`, {
