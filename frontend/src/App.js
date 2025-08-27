@@ -19,9 +19,6 @@ import { isAuthenticated, logout, getCurrentUser } from './utils/auth';
 import { apiClient, fetchMyPermissions } from './utils/apiClient';
 import { API_BASE_URL } from './config';
 import { PermissionsProvider } from './context/PermissionsContext';
-import { SocketProvider } from './context/SocketProvider';
-import CreateOfferModal from './components/CreateOfferModal';
-import OffersPage from './components/OffersPage';
 import { getCurrentEDT, setAppTimezone, parseAppTzDateTimeToEpochMs } from './utils/timeUtils';
 import { useModalScrollLock } from './utils/modalScrollLock';
 
@@ -78,8 +75,6 @@ function App() {
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [isTimeSyncing, setIsTimeSyncing] = useState(false);
   const [permissions, setPermissions] = useState([]);
-  const [showCreateOfferModal, setShowCreateOfferModal] = useState(false);
-  const [selectedDriversForOffer, setSelectedDriversForOffer] = useState([]);
   const hasPermission = (key) => Array.isArray(permissions) && (permissions.includes('*') || permissions.includes(key));
 
   const handleLoginSuccess = (userData) => {
@@ -800,38 +795,6 @@ function App() {
     }
   };
 
-  const handleMakeOffer = (selectedTruckIds) => {
-    // Get selected drivers data for the modal
-    const selectedDrivers = selectedTruckIds.map(id => {
-      const truck = trucks.find(t => t.id === id);
-      if (truck) {
-        return {
-          id: truck.id,
-          name: truck.driver_name,
-          truckNumber: truck.truck_no,
-          phone: truck.cell_phone,
-          location: truck.city_state_zip
-        };
-      }
-      return null;
-    }).filter(driver => driver !== null);
-    
-    setSelectedDriversForOffer(selectedDrivers);
-    setShowCreateOfferModal(true);
-  };
-
-  const handleCloseCreateOfferModal = () => {
-    setShowCreateOfferModal(false);
-    setSelectedDriversForOffer([]);
-    setSelectedTrucks([]); // Clear truck selection
-  };
-
-  const handleOfferCreated = () => {
-    // Offer was successfully created
-    handleCloseCreateOfferModal();
-    // Optionally show success message or navigate to offers page
-  };
-
   const fallbackCopyToClipboard = (text) => {
     const textArea = document.createElement('textarea');
     textArea.value = text;
@@ -862,7 +825,6 @@ function App() {
     <div className="app-bg">
       <div className="container">
         <PermissionsProvider permissions={permissions}>
-        <SocketProvider>
         <div className="app-header">
           <div className="header-left">
             <h1>Connex Transport</h1>
@@ -890,10 +852,6 @@ function App() {
               </button>
               <button onClick={() => setView('driver-updates')} className="header-btn driver-updates-btn" disabled={!hasPermission('driver.updates.view')}>
                 <span className="btn-text">Driver Updates</span>
-              </button>
-              <button onClick={() => setView('offers')} className="header-btn offers-btn">
-                <span className="btn-icon">🚛</span>
-                <span className="btn-text">Offers</span>
               </button>
               {hasPermission('dashboard.analytics.view') && (
                 <button onClick={() => setView('admin')} className="header-btn admin-btn">
@@ -1006,7 +964,6 @@ function App() {
               onRemoveHold={handleRemoveHold}
               onHoldExpired={handleHoldRefresh}
               serverTimeOffset={serverTimeOffset}
-              onMakeOffer={handleMakeOffer}
             />
 
             <Pagination
@@ -1066,16 +1023,6 @@ function App() {
             driverName={locationHistoryModal.driverName}
           />
         )}
-
-        {showCreateOfferModal && (
-          <CreateOfferModal
-            isOpen={showCreateOfferModal}
-            onClose={handleCloseCreateOfferModal}
-            onOfferCreated={handleOfferCreated}
-            selectedDrivers={selectedDriversForOffer}
-            user={user}
-          />
-        )}
           </>
           ) : view === 'admin' ? (
           <AdminPage onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
@@ -1085,10 +1032,7 @@ function App() {
                <DriverUpdates onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
          ) : view === 'map' ? (
           <MapPage onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
-        ) : view === 'offers' ? (
-          <OffersPage onBack={() => setView('main')} user={user} trucks={trucks} />
         ) : null}
-        </SocketProvider>
         </PermissionsProvider>
       </div>
     </div>

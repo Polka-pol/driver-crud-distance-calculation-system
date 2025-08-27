@@ -27,8 +27,7 @@ const TruckTable = ({
   onHoldClick,
   onRemoveHold,
   onHoldExpired,
-  serverTimeOffset,
-  onMakeOffer
+  serverTimeOffset
 }) => {
   const { has } = usePermissions();
   const [expandedCards, setExpandedCards] = useState(new Set());
@@ -130,12 +129,6 @@ const TruckTable = ({
 
   const handleRefreshClick = () => {
     onRefresh();
-  };
-
-  const handleMakeOfferClick = () => {
-    if (selectedTrucks.length > 0 && onMakeOffer) {
-      onMakeOffer(selectedTrucks);
-    }
   };
 
   const isAllSelectedOnPage = trucks.length > 0 && trucks.every(truck => selectedTrucks.includes(truck.id));
@@ -281,15 +274,6 @@ const TruckTable = ({
               className="mobile-select-all"
             />
             <span className="mobile-header-title">Drivers ({trucks.length})</span>
-            {selectedTrucks.length > 0 && (
-              <button
-                onClick={handleMakeOfferClick}
-                className="mobile-make-offer-btn"
-                title={`Make offer to ${selectedTrucks.length} selected driver${selectedTrucks.length > 1 ? 's' : ''}`}
-              >
-                📋 Make Offer ({selectedTrucks.length})
-              </button>
-            )}
           </div>
           <button
             onClick={handleRefreshClick}
@@ -355,31 +339,20 @@ const TruckTable = ({
               </div>
             </th>
             <th className="col-comment">
-              <div className="header-actions">
-                {selectedTrucks.length > 0 && (
-                  <button
-                    onClick={handleMakeOfferClick}
-                    className="make-offer-btn"
-                    title={`Make offer to ${selectedTrucks.length} selected driver${selectedTrucks.length > 1 ? 's' : ''}`}
-                  >
-                    📋 Make Offer ({selectedTrucks.length})
-                  </button>
+              <button
+                onClick={handleRefreshClick}
+                disabled={isRefreshing || isUpdated}
+                className={`refresh-table-btn ${isRefreshing ? 'refreshing' : ''} ${isUpdated ? 'updated' : ''}`}
+                title={isUpdated ? "Table updated" : "Refresh table data"}
+              >
+                {isUpdated ? (
+                  <span className="updated-text">updated</span>
+                ) : (
+                  <span className={`refresh-icon ${isRefreshing ? 'rotating' : ''}`}>
+                    ↻
+                  </span>
                 )}
-                <button
-                  onClick={handleRefreshClick}
-                  disabled={isRefreshing || isUpdated}
-                  className={`refresh-table-btn ${isRefreshing ? 'refreshing' : ''} ${isUpdated ? 'updated' : ''}`}
-                  title={isUpdated ? "Table updated" : "Refresh table data"}
-                >
-                  {isUpdated ? (
-                    <span className="updated-text">updated</span>
-                  ) : (
-                    <span className={`refresh-icon ${isRefreshing ? 'rotating' : ''}`}>
-                      ↻
-                    </span>
-                  )}
-                </button>
-              </div>
+              </button>
             </th>
           </tr>
         </thead>

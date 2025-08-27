@@ -48,59 +48,7 @@
   text-align: center;
   padding: 7px 8px;
   height: 38px; /* Slightly smaller height for header */
-}
-
-/* Make Offer Button Styles */
-.make-offer-btn {
-  background: #10b981;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  margin-right: 8px;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.make-offer-btn:hover {
-  background: #059669;
-  transform: translateY(-1px);
-}
-
-.make-offer-btn:active {
-  transform: translateY(0);
-}
-
-.mobile-make-offer-btn {
-  background: #10b981;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  margin-left: 12px;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.mobile-make-offer-btn:hover {
-  background: #059669;
-  transform: translateY(-1px);
-}
-
-.mobile-make-offer-btn:active {
-  transform: translateY(0);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  max-height: 38px;
 }
 
 /* Ensure content doesn't break the fixed height */
