@@ -610,7 +610,8 @@ h1 {
   box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
 
-.loading-spinner {
+/* Main App Loading Spinner - More specific to avoid conflicts */
+.app-bg .loading-spinner {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -619,17 +620,17 @@ h1 {
   color: #475569;
 }
 
-.spinner {
+.app-bg .spinner {
   width: 40px;
   height: 40px;
   border: 3px solid #f3f3f3;
   border-top: 3px solid #2980b9;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: app-spin 1s linear infinite;
   margin-bottom: 16px;
 }
 
-@keyframes spin {
+@keyframes app-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
@@ -779,6 +780,18 @@ h1 {
   background: linear-gradient(135deg, #1976d2, #1565c0);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgb(33 150 243 / 40%);
+}
+
+.floating-selection-menu .action-buttons .make-offer-btn {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  box-shadow: 0 2px 8px rgb(245 158 11 / 30%);
+}
+
+.floating-selection-menu .action-buttons .make-offer-btn:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgb(245 158 11 / 40%);
 }
 
 .floating-selection-menu .action-buttons .reset-btn {
@@ -985,6 +998,17 @@ h1 {
 .driver-updates-btn:hover {
   background: linear-gradient(135deg, var(--btn-primary-dark), #047857);
   box-shadow: 0 4px 12px rgb(16 185 129 / 30%);
+}
+
+/* Offers button - Orange */
+.offers-btn {
+  --btn-primary: #f59e0b;
+  --btn-primary-dark: #d97706;
+}
+
+.offers-btn:hover {
+  background: linear-gradient(135deg, var(--btn-primary-dark), #b45309);
+  box-shadow: 0 4px 12px rgb(245 158 11 / 30%);
 }
 
 /* Logout button - Gray */

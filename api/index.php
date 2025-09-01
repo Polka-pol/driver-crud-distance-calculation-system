@@ -46,6 +46,8 @@ use App\Controllers\RbacController;
 use App\Core\Authz;
 use App\Controllers\OfferController;
 use App\Controllers\ChatController;
+use App\Controllers\SocketAuthController;
+require_once __DIR__ . '/src/Controllers/DriverController.php';
 
 // --- Headers ---
 // Set common headers for the API response.
@@ -679,70 +681,91 @@ if (preg_match('/^\/driver\/offers\/(\d+)\/messages$/', $apiRoute, $matches) && 
     exit();
 }
 
-// === OFFERS SYSTEM ROUTES ===
+// === OFFERS AND CHAT ROUTES (NEW) ===
 
-// Create new offer
+// Offers collection: GET, POST
+if ($apiRoute === '/offers' && $requestMethod === 'GET') {
+    OfferController::index();
+    exit();
+}
 if ($apiRoute === '/offers' && $requestMethod === 'POST') {
     OfferController::create();
     exit();
 }
 
-// Get all offers for user
-if ($apiRoute === '/offers' && $requestMethod === 'GET') {
-    OfferController::getOffers();
-    exit();
-}
-
-// Get specific offer details
-if (preg_match('/^\/offers\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+// Offers item: GET, PUT, DELETE
+if (preg_match('/^\/offers\/(\d+)$/', $apiRoute, $matches)) {
     $offerId = (int)$matches[1];
-    OfferController::getOffer($offerId);
-    exit();
+    if ($requestMethod === 'GET') { OfferController::show($offerId); exit(); }
+    if ($requestMethod === 'PUT') { OfferController::update($offerId); exit(); }
+    if ($requestMethod === 'DELETE') { OfferController::delete($offerId); exit(); }
 }
 
-// Submit driver proposal
-if ($apiRoute === '/offers/proposal' && $requestMethod === 'POST') {
-    OfferController::submitProposal();
-    exit();
-}
-
-// Update offer status
-if ($apiRoute === '/offers/status' && $requestMethod === 'PUT') {
-    OfferController::updateStatus();
-    exit();
-}
-
-// === CHAT SYSTEM ROUTES ===
-
-// Get chat messages for offer
-if (preg_match('/^\/chat\/(\d+)\/messages$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+// Send offer to drivers
+if (preg_match('/^\/offers\/(\d+)\/send-to-drivers$/', $apiRoute, $matches) && $requestMethod === 'POST') {
     $offerId = (int)$matches[1];
-    ChatController::getMessages($offerId);
+    OfferController::sendToDrivers($offerId);
     exit();
 }
 
-// Send chat message
-if ($apiRoute === '/chat/send' && $requestMethod === 'POST') {
-    ChatController::sendMessage();
-    exit();
-}
-
-// Mark messages as read
-if ($apiRoute === '/chat/read' && $requestMethod === 'POST') {
-    ChatController::markAsRead();
-    exit();
-}
-
-// Get unread message count
-if ($apiRoute === '/chat/unread-count' && $requestMethod === 'GET') {
-    ChatController::getUnreadCount();
-    exit();
-}
-
-// Get chat participants
-if (preg_match('/^\/chat\/(\d+)\/participants$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+// Offer proposals listing
+if (preg_match('/^\/offers\/(\d+)\/proposals$/', $apiRoute, $matches) && $requestMethod === 'GET') {
     $offerId = (int)$matches[1];
-    ChatController::getParticipants($offerId);
+    OfferController::listProposals($offerId);
+    exit();
+}
+
+// Respond to a proposal
+if (preg_match('/^\/proposals\/(\d+)\/respond$/', $apiRoute, $matches) && $requestMethod === 'PUT') {
+    $proposalId = (int)$matches[1];
+    OfferController::respondToProposal($proposalId);
+    exit();
+}
+
+// Chat messages for an offer and driver
+if (preg_match('/^\/offers\/(\d+)\/chat\/(\d+)$/', $apiRoute, $matches)) {
+    $offerId = (int)$matches[1];
+    $driverId = (int)$matches[2];
+    if ($requestMethod === 'GET') { ChatController::getMessages($offerId, $driverId); exit(); }
+    if ($requestMethod === 'POST') { ChatController::sendMessage($offerId, $driverId); exit(); }
+}
+
+// Mark a chat message as read
+if (preg_match('/^\/chat\/(\d+)\/read$/', $apiRoute, $matches) && $requestMethod === 'PUT') {
+    $messageId = (int)$matches[1];
+    ChatController::markAsRead($messageId);
+    exit();
+}
+
+// Socket authentication for Socket.io handshake
+if ($apiRoute === '/socket/auth' && $requestMethod === 'POST') {
+    SocketAuthController::authenticate();
+    exit();
+}
+
+// Driver routes for offers system
+if ($apiRoute === '/drivers/available' && $requestMethod === 'GET') {
+    $controller = new DriverController();
+    $controller->getAvailable();
+    exit();
+}
+
+if ($apiRoute === '/drivers/by-location' && $requestMethod === 'GET') {
+    $controller = new DriverController();
+    $controller->getByLocation();
+    exit();
+}
+
+if (preg_match('/^\/drivers\/(\d+)$/', $apiRoute, $matches) && $requestMethod === 'GET') {
+    $driverId = (int)$matches[1];
+    $controller = new DriverController();
+    $controller->getById($driverId);
+    exit();
+}
+
+// Get driver details by IDs for offers
+if ($apiRoute === '/drivers/by-ids' && $requestMethod === 'POST') {
+    OfferController::getDriversByIds();
     exit();
 }
 

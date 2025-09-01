@@ -33,6 +33,54 @@ const logger = winston.createLogger({
   ]
 });
 
+// Webhook endpoint for offer creation
+app.post('/events/offer-created', express.json(), (req, res) => {
+    try {
+        const webhookSecret = req.headers['x-webhook-secret'];
+        if (webhookSecret !== process.env.WEBHOOK_SECRET) {
+            logger.warn('Invalid webhook secret for offer-created');
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const offerData = req.body;
+        logger.info('Received offer-created webhook:', offerData);
+
+        // Broadcast to all connected clients
+        io.emit('offer_created', offerData);
+        
+        res.json({ success: true });
+    } catch (error) {
+        logger.error('Error processing offer-created webhook:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Webhook endpoint for chat messages
+app.post('/events/message-sent', express.json(), (req, res) => {
+    try {
+        const webhookSecret = req.headers['x-webhook-secret'];
+        if (webhookSecret !== process.env.WEBHOOK_SECRET) {
+            logger.warn('Invalid webhook secret for message-sent');
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { offer_id, driver_id, message } = req.body;
+        logger.info('Received message-sent webhook:', { offer_id, driver_id, message_id: message.id });
+
+        // Broadcast message to specific offer room
+        io.to(`offer_${offer_id}`).emit('receive_message', {
+            offer_id,
+            driver_id,
+            message
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        logger.error('Error processing message-sent webhook:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Rate limiting configuration
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -75,75 +123,12 @@ app.get('/health', (req, res) => {
     res.json({
         status: 'OK',
         service: 'Offers Socket.io Server',
+        timestamp: new Date().toISOString(),
         uptime: process.uptime(),
+        version: '1.0.0',
         environment: process.env.NODE_ENV || 'development',
-        connections: io.engine.clientsCount,
-        database: {
-            mysql: 'Connected',
-            redis: 'Connected'
-        }
+        connections: io.engine.clientsCount
     });
-});
-
-// API notification endpoint for PHP backend
-app.post('/api/notify', (req, res) => {
-    try {
-        const { event, data } = req.body;
-        
-        if (!event || !data) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Event and data are required' 
-            });
-        }
-
-        logger.info(`📡 API notification received: ${event}`, { data });
-
-        // Emit the event to all connected clients or specific rooms
-        switch (event) {
-            case 'new_offer_created':
-                // Notify all drivers
-                io.emit('new_offer_created', data);
-                break;
-                
-            case 'driver_proposal':
-                // Notify the dispatcher who created the offer
-                io.emit('driver_proposal', data);
-                break;
-                
-            case 'offer_status_change':
-                // Notify all participants in the offer
-                io.to(`offer_${data.offerId}`).emit('offer_status_change', data);
-                break;
-                
-            case 'new_message':
-                // Notify participants in the offer chat
-                io.to(`offer_${data.offerId}`).emit('new_message', data);
-                break;
-                
-            case 'messages_read':
-                // Notify participants about read receipts
-                io.to(`offer_${data.offerId}`).emit('messages_read', data);
-                break;
-                
-            default:
-                // Generic event broadcast
-                io.emit(event, data);
-        }
-
-        res.json({ 
-            success: true, 
-            message: 'Notification sent successfully',
-            event: event
-        });
-
-    } catch (error) {
-        logger.error('API notification error', { error: error.message });
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to process notification' 
-        });
-    }
 });
 
 // Initialize database connections

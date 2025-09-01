@@ -14,14 +14,14 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
         current_page: 1,
         total_pages: 0,
         total_records: 0,
-        per_page: 10
+        per_page: 5 // Fixed to 5 items per page
     });
 
     const fetchActivityHistory = useCallback(async (page) => {
         try {
             setError(null);
             
-            const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/location-history?page=${page}`);
+            const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/location-history?page=${page}&limit=5`);
             if (!response.ok) {
                 throw new Error('Failed to fetch location history.');
             }
@@ -47,20 +47,33 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
     // Prevent body scroll when modal is open
     useModalScrollLock(isOpen);
 
-    const handlePageChange = (page) => {
+    const handlePageChange = useCallback((page) => {
         fetchActivityHistory(page);
-    };
+    }, [fetchActivityHistory]);
 
-    const normalizeUtcString = (s) => {
-        if (!s) return s;
-        // If it's naive 'YYYY-MM-DD HH:MM:SS', convert to ISO UTC
-        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
-            return s.replace(' ', 'T') + 'Z';
+    const handlePreviousPage = useCallback(() => {
+        if (pagination.current_page > 1) {
+            handlePageChange(pagination.current_page - 1);
         }
-        return s;
-    };
+    }, [handlePageChange, pagination.current_page]);
 
-    const formatDate = (dateString) => formatEDTTimeForModal(normalizeUtcString(dateString));
+    const handleNextPage = useCallback(() => {
+        if (pagination.current_page < pagination.total_pages) {
+            handlePageChange(pagination.current_page + 1);
+        }
+    }, [handlePageChange, pagination.current_page, pagination.total_pages]);
+
+    const formatDate = useCallback((dateString) => {
+        if (!dateString) return 'N/A';
+        // Simple date formatting - no need for complex UTC conversion for display
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString; // Return original if invalid
+            return formatEDTTimeForModal(dateString);
+        } catch (e) {
+            return dateString; // Return original if error
+        }
+    }, []);
 
     // Show WhenWillBeThere values as-is (no formatting)
 
@@ -76,42 +89,12 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
         new_status,
         showDivider
     }) => {
-        const renderChangeField = (label, oldValue, newValue, emoji, isHighlighted = false) => {
-            const hasChanged = oldValue !== newValue;
-            const displayValue = newValue || oldValue || 'Not set';
-            
-            if (hasChanged && isHighlighted) {
-                return (
-                    <div className="field-change-multiline">
-                        <div className="field-label-line">
-                            {emoji} <strong>{label}:</strong>
-                        </div>
-                        <div className="field-change-line">
-                            <span className="old-value-inline">{oldValue || 'Not set'}</span>
-                            <span className="arrow-inline"> → </span>
-                            <span className="new-value-inline">{newValue || 'Not set'}</span>
-                        </div>
-                    </div>
-                );
-            } else {
-                return (
-                    <div className="field-unchanged-multiline">
-                        <div className="field-label-line">
-                            {emoji} <strong>{label}:</strong>
-                        </div>
-                        <div className="field-value-line">
-                            {displayValue}
-                        </div>
-                    </div>
-                );
-            }
-        };
-
-        const changedFields = [];
-        if (old_location !== new_location) changedFields.push('location');
-        if (old_whenwillbethere !== new_whenwillbethere) changedFields.push('whenwillbethere');
-        if (old_status !== new_status) changedFields.push('status');
-        const hasChanges = changedFields.length > 0;
+        // Simple calculations - no need for complex memoization for simple text
+        const locationChanged = old_location !== new_location;
+        const whenChanged = old_whenwillbethere !== new_whenwillbethere;
+        const statusChanged = old_status !== new_status;
+        const hasChanges = locationChanged || whenChanged || statusChanged;
+        const changeCount = [locationChanged, whenChanged, statusChanged].filter(Boolean).length;
 
         return (
             <div className="timeline-item-compact">
@@ -120,7 +103,7 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                     <span className="timeline-user">👤 {changed_by_username}</span>
                     {hasChanges && (
                         <span className="activity-badge">
-                            ⚡ {changedFields.length} change{changedFields.length > 1 ? 's' : ''}
+                            ⚡ {changeCount} change{changeCount > 1 ? 's' : ''}
                         </span>
                     )}
                 </div>
@@ -128,34 +111,58 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                 <div className="timeline-content-compact">
                     {/* Location */}
                     <div className="field-row">
-                        {renderChangeField(
-                            'Location',
-                            old_location,
-                            new_location,
-                            '📍',
-                            changedFields.includes('location')
+                        {locationChanged ? (
+                            <div className="field-change-multiline">
+                                <div className="field-label-line">📍 <strong>Location:</strong></div>
+                                <div className="field-change-line">
+                                    <span className="old-value-inline">{old_location || 'Not set'}</span>
+                                    <span className="arrow-inline"> → </span>
+                                    <span className="new-value-inline">{new_location || 'Not set'}</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="field-unchanged-multiline">
+                                <div className="field-label-line">📍 <strong>Location:</strong></div>
+                                <div className="field-value-line">{new_location || old_location || 'Not set'}</div>
+                            </div>
                         )}
                     </div>
                     
                     {/* When Will Be There */}
                     <div className="field-row">
-                        {renderChangeField(
-                            'When Will Be There',
-                            old_whenwillbethere || null,
-                            new_whenwillbethere || null,
-                            '⏰',
-                            changedFields.includes('whenwillbethere')
+                        {whenChanged ? (
+                            <div className="field-change-multiline">
+                                <div className="field-label-line">⏰ <strong>When Will Be There:</strong></div>
+                                <div className="field-change-line">
+                                    <span className="old-value-inline">{old_whenwillbethere || 'Not set'}</span>
+                                    <span className="arrow-inline"> → </span>
+                                    <span className="new-value-inline">{new_whenwillbethere || 'Not set'}</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="field-unchanged-multiline">
+                                <div className="field-label-line">⏰ <strong>When Will Be There:</strong></div>
+                                <div className="field-value-line">{new_whenwillbethere || old_whenwillbethere || 'Not set'}</div>
+                            </div>
                         )}
                     </div>
                     
                     {/* Status */}
                     <div className="field-row">
-                        {renderChangeField(
-                            'Status',
-                            old_status,
-                            new_status,
-                            '📊',
-                            changedFields.includes('status')
+                        {statusChanged ? (
+                            <div className="field-change-multiline">
+                                <div className="field-label-line">📊 <strong>Status:</strong></div>
+                                <div className="field-change-line">
+                                    <span className="old-value-inline">{old_status || 'Not set'}</span>
+                                    <span className="arrow-inline"> → </span>
+                                    <span className="new-value-inline">{new_status || 'Not set'}</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="field-unchanged-multiline">
+                                <div className="field-label-line">📊 <strong>Status:</strong></div>
+                                <div className="field-value-line">{new_status || old_status || 'Not set'}</div>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -167,23 +174,27 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
 
     // Removed unused getChangedFields; logic moved into memoized TimelineItem
 
-    const handleClose = () => {
+    const handleClose = useCallback(() => {
         setHistory([]);
         setError(null);
         onClose();
-    };
+    }, [onClose]);
+
+    const handleModalClick = useCallback((e) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (e && e.preventDefault) e.preventDefault();
+    }, []);
 
     if (!isOpen) return null;
 
     return (
         <div className="modal-overlay" onClick={handleClose}>
-            <div className="modal-content" onClick={(e) => {
-          if (e && e.stopPropagation) e.stopPropagation();
-          if (e && e.preventDefault) e.preventDefault();
-        }}>
+            <div className="modal-content" onClick={handleModalClick}>
                 <div className="modal-header">
                     <h3>Activity History - {driverName || truckNumber}</h3>
-                    <button className="modal-close" onClick={handleClose}>×</button>
+                    <div className="modal-header-info">
+                        <button className="modal-close" onClick={handleClose}>×</button>
+                    </div>
                 </div>
                 
                 <div className="modal-body">
@@ -203,7 +214,7 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                         <div className="location-timeline">
                             {history.map((record, index) => (
                                 <TimelineItem
-                                    key={record.id}
+                                    key={`${record.id}-${record.created_at}`}
                                     id={record.id}
                                     created_at={record.created_at}
                                     changed_by_username={record.changed_by_username}
@@ -226,7 +237,7 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                             <button 
                                 className="pagination-btn"
                                 disabled={pagination.current_page === 1}
-                                onClick={() => handlePageChange(pagination.current_page - 1)}
+                                onClick={handlePreviousPage}
                             >
                                 Previous
                             </button>
@@ -238,7 +249,7 @@ const LocationHistoryModal = ({ isOpen, onClose, truckId, truckNumber, driverNam
                             <button 
                                 className="pagination-btn"
                                 disabled={pagination.current_page === pagination.total_pages}
-                                onClick={() => handlePageChange(pagination.current_page + 1)}
+                                onClick={handleNextPage}
                             >
                                 Next
                             </button>

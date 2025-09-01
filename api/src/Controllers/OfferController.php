@@ -2,449 +2,364 @@
 
 namespace App\Controllers;
 
-use App\Core\Logger;
 use App\Core\Database;
-use App\Core\ActivityLogger;
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
+use App\Core\Auth;
+use App\Core\Logger;
+use PDO;
+use PDOException;
+use Exception;
 
 class OfferController
 {
-    /**
-     * Create a new offer
-     */
-    public static function create()
-    {
-        $user = self::authenticateRequest();
-        if (!$user) return;
-
-        // Only dispatchers can create offers
-        if ($user['role'] !== 'dispatcher') {
-            self::sendResponse(['success' => false, 'message' => 'Unauthorized. Only dispatchers can create offers.'], 403);
-            return;
-        }
-
-        $data = json_decode(file_get_contents('php://input'), true);
-
-        // Validate required fields
-        $required = ['truck_id', 'pickup_location', 'delivery_location', 'pickup_date', 'delivery_date', 'rate'];
-        foreach ($required as $field) {
-            if (!isset($data[$field]) || empty($data[$field])) {
-                self::sendResponse(['success' => false, 'message' => "Field '$field' is required."], 400);
-                return;
-            }
-        }
-
-        try {
-            $db = Database::getInstance();
-            
-            // Insert offer
-            $sql = "INSERT INTO offers (created_by, truck_id, pickup_location, delivery_location, 
-                    pickup_date, delivery_date, rate, description, status, created_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
-            
-            $params = [
-                $user['id'],
-                $data['truck_id'],
-                $data['pickup_location'],
-                $data['delivery_location'],
-                $data['pickup_date'],
-                $data['delivery_date'],
-                $data['rate'],
-                $data['description'] ?? ''
-            ];
-
-            $stmt = $db->prepare($sql);
-            $stmt->execute($params);
-            $offerId = $db->lastInsertId();
-
-            // Log activity
-            ActivityLogger::log('offer_created', [
-                'offer_id' => $offerId,
-                'truck_id' => $data['truck_id'],
-                'created_by' => $user['id']
-            ]);
-
-            // Notify Socket.io server about new offer
-            self::notifySocketServer('new_offer_created', [
-                'offerId' => $offerId,
-                'truckId' => $data['truck_id'],
-                'createdBy' => $user['id'],
-                'pickupLocation' => $data['pickup_location'],
-                'deliveryLocation' => $data['delivery_location'],
-                'rate' => $data['rate']
-            ]);
-
-            self::sendResponse([
-                'success' => true,
-                'message' => 'Offer created successfully.',
-                'offer_id' => $offerId
-            ]);
-
-        } catch (\Exception $e) {
-            Logger::error('Offer creation failed', ['error' => $e->getMessage(), 'user_id' => $user['id']]);
-            self::sendResponse(['success' => false, 'message' => 'Failed to create offer.'], 500);
-        }
-    }
-
-    /**
-     * Get all offers for a user
-     */
-    public static function getOffers()
-    {
-        $user = self::authenticateRequest();
-        if (!$user) return;
-
-        try {
-            $db = Database::getInstance();
-            
-            if ($user['role'] === 'dispatcher') {
-                // Dispatchers see all their created offers
-                $sql = "SELECT o.*, t.TruckNumber, t.DriverName, t.CellPhone,
-                        COUNT(op.id) as proposal_count,
-                        MAX(op.created_at) as last_proposal_date
-                        FROM offers o
-                        LEFT JOIN Trucks t ON o.truck_id = t.ID
-                        LEFT JOIN offer_proposals op ON o.id = op.offer_id
-                        WHERE o.created_by = ?
-                        GROUP BY o.id
-                        ORDER BY o.created_at DESC";
-                $params = [$user['id']];
-            } else {
-                // Drivers see offers for their truck
-                $sql = "SELECT o.*, u.full_name as dispatcher_name, u.mobile_number as dispatcher_phone,
-                        op.id as my_proposal_id, op.status as my_proposal_status, op.counter_rate
-                        FROM offers o
-                        LEFT JOIN users u ON o.created_by = u.id
-                        LEFT JOIN Trucks t ON o.truck_id = t.ID
-                        LEFT JOIN offer_proposals op ON (o.id = op.offer_id AND op.driver_id = ?)
-                        WHERE t.DriverName = ? AND o.status IN ('pending', 'active')
-                        ORDER BY o.created_at DESC";
-                $params = [$user['id'], $user['fullName']];
-            }
-
-            $stmt = $db->prepare($sql);
-            $stmt->execute($params);
-            $offers = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-            self::sendResponse([
-                'success' => true,
-                'offers' => $offers
-            ]);
-
-        } catch (\Exception $e) {
-            Logger::error('Get offers failed', ['error' => $e->getMessage(), 'user_id' => $user['id']]);
-            self::sendResponse(['success' => false, 'message' => 'Failed to retrieve offers.'], 500);
-        }
-    }
-
-    /**
-     * Get specific offer details
-     */
-    public static function getOffer($offerId)
-    {
-        $user = self::authenticateRequest();
-        if (!$user) return;
-
-        try {
-            $db = Database::getInstance();
-            
-            $sql = "SELECT o.*, t.TruckNumber, t.DriverName, t.CellPhone, t.latitude, t.longitude,
-                    u.full_name as dispatcher_name, u.mobile_number as dispatcher_phone
-                    FROM offers o
-                    LEFT JOIN Trucks t ON o.truck_id = t.ID
-                    LEFT JOIN users u ON o.created_by = u.id
-                    WHERE o.id = ?";
-            
-            $stmt = $db->prepare($sql);
-            $stmt->execute([$offerId]);
-            $offer = $stmt->fetch(\PDO::FETCH_ASSOC);
-
-            if (!$offer) {
-                self::sendResponse(['success' => false, 'message' => 'Offer not found.'], 404);
-                return;
-            }
-
-            // Get proposals for this offer
-            $sql = "SELECT op.*, u.full_name as driver_name, u.mobile_number as driver_phone
-                    FROM offer_proposals op
-                    LEFT JOIN users u ON op.driver_id = u.id
-                    WHERE op.offer_id = ?
-                    ORDER BY op.created_at DESC";
-            
-            $stmt = $db->prepare($sql);
-            $stmt->execute([$offerId]);
-            $proposals = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-            $offer['proposals'] = $proposals;
-
-            self::sendResponse([
-                'success' => true,
-                'offer' => $offer
-            ]);
-
-        } catch (\Exception $e) {
-            Logger::error('Get offer failed', ['error' => $e->getMessage(), 'offer_id' => $offerId]);
-            self::sendResponse(['success' => false, 'message' => 'Failed to retrieve offer.'], 500);
-        }
-    }
-
-    /**
-     * Submit driver proposal
-     */
-    public static function submitProposal()
-    {
-        $user = self::authenticateRequest();
-        if (!$user) return;
-
-        $data = json_decode(file_get_contents('php://input'), true);
-
-        if (!isset($data['offer_id'])) {
-            self::sendResponse(['success' => false, 'message' => 'Offer ID is required.'], 400);
-            return;
-        }
-
-        try {
-            $db = Database::getInstance();
-            
-            // Check if offer exists and is active
-            $sql = "SELECT * FROM offers WHERE id = ? AND status IN ('pending', 'active')";
-            $stmt = $db->prepare($sql);
-            $stmt->execute([$data['offer_id']]);
-            $offer = $stmt->fetch(\PDO::FETCH_ASSOC);
-
-            if (!$offer) {
-                self::sendResponse(['success' => false, 'message' => 'Offer not found or no longer active.'], 404);
-                return;
-            }
-
-            // Check if driver already has a proposal for this offer
-            $sql = "SELECT id FROM offer_proposals WHERE offer_id = ? AND driver_id = ?";
-            $stmt = $db->prepare($sql);
-            $stmt->execute([$data['offer_id'], $user['id']]);
-            
-            if ($stmt->fetch()) {
-                self::sendResponse(['success' => false, 'message' => 'You have already submitted a proposal for this offer.'], 400);
-                return;
-            }
-
-            // Insert proposal
-            $sql = "INSERT INTO offer_proposals (offer_id, driver_id, counter_rate, message, status, created_at) 
-                    VALUES (?, ?, ?, ?, 'pending', NOW())";
-            
-            $params = [
-                $data['offer_id'],
-                $user['id'],
-                $data['counter_rate'] ?? $offer['rate'],
-                $data['message'] ?? ''
-            ];
-
-            $stmt = $db->prepare($sql);
-            $stmt->execute($params);
-            $proposalId = $db->lastInsertId();
-
-            // Log activity
-            ActivityLogger::log('driver_proposal_submitted', [
-                'proposal_id' => $proposalId,
-                'offer_id' => $data['offer_id'],
-                'driver_id' => $user['id']
-            ]);
-
-            // Notify Socket.io server
-            self::notifySocketServer('driver_proposal', [
-                'proposalId' => $proposalId,
-                'offerId' => $data['offer_id'],
-                'driverId' => $user['id'],
-                'driverName' => $user['fullName'],
-                'counterRate' => $data['counter_rate'] ?? $offer['rate'],
-                'message' => $data['message'] ?? ''
-            ]);
-
-            self::sendResponse([
-                'success' => true,
-                'message' => 'Proposal submitted successfully.',
-                'proposal_id' => $proposalId
-            ]);
-
-        } catch (\Exception $e) {
-            Logger::error('Submit proposal failed', ['error' => $e->getMessage(), 'user_id' => $user['id']]);
-            self::sendResponse(['success' => false, 'message' => 'Failed to submit proposal.'], 500);
-        }
-    }
-
-    /**
-     * Update offer status
-     */
-    public static function updateStatus()
-    {
-        $user = self::authenticateRequest();
-        if (!$user) return;
-
-        $data = json_decode(file_get_contents('php://input'), true);
-
-        if (!isset($data['offer_id']) || !isset($data['status'])) {
-            self::sendResponse(['success' => false, 'message' => 'Offer ID and status are required.'], 400);
-            return;
-        }
-
-        $validStatuses = ['pending', 'active', 'accepted', 'completed', 'cancelled'];
-        if (!in_array($data['status'], $validStatuses)) {
-            self::sendResponse(['success' => false, 'message' => 'Invalid status.'], 400);
-            return;
-        }
-
-        try {
-            $db = Database::getInstance();
-            
-            // Check if user has permission to update this offer
-            $sql = "SELECT * FROM offers WHERE id = ? AND created_by = ?";
-            $stmt = $db->prepare($sql);
-            $stmt->execute([$data['offer_id'], $user['id']]);
-            $offer = $stmt->fetch(\PDO::FETCH_ASSOC);
-
-            if (!$offer) {
-                self::sendResponse(['success' => false, 'message' => 'Offer not found or unauthorized.'], 404);
-                return;
-            }
-
-            // Update offer status
-            $sql = "UPDATE offers SET status = ?, updated_at = NOW() WHERE id = ?";
-            $stmt = $db->prepare($sql);
-            $stmt->execute([$data['status'], $data['offer_id']]);
-
-            // If accepting a proposal, update the proposal status
-            if ($data['status'] === 'accepted' && isset($data['proposal_id'])) {
-                $sql = "UPDATE offer_proposals SET status = 'accepted' WHERE id = ? AND offer_id = ?";
-                $stmt = $db->prepare($sql);
-                $stmt->execute([$data['proposal_id'], $data['offer_id']]);
-
-                // Reject other proposals
-                $sql = "UPDATE offer_proposals SET status = 'rejected' WHERE offer_id = ? AND id != ?";
-                $stmt = $db->prepare($sql);
-                $stmt->execute([$data['offer_id'], $data['proposal_id']]);
-            }
-
-            // Log activity
-            ActivityLogger::log('offer_status_updated', [
-                'offer_id' => $data['offer_id'],
-                'new_status' => $data['status'],
-                'updated_by' => $user['id']
-            ]);
-
-            // Notify Socket.io server
-            self::notifySocketServer('offer_status_change', [
-                'offerId' => $data['offer_id'],
-                'newStatus' => $data['status'],
-                'updatedBy' => $user['id'],
-                'proposalId' => $data['proposal_id'] ?? null
-            ]);
-
-            self::sendResponse([
-                'success' => true,
-                'message' => 'Offer status updated successfully.'
-            ]);
-
-        } catch (\Exception $e) {
-            Logger::error('Update offer status failed', ['error' => $e->getMessage(), 'user_id' => $user['id']]);
-            self::sendResponse(['success' => false, 'message' => 'Failed to update offer status.'], 500);
-        }
-    }
-
-    /**
-     * Authenticate JWT token and return user data
-     */
-    private static function authenticateRequest()
-    {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-
-        // Debug logging
-        Logger::info('Authentication attempt', [
-            'headers' => array_keys($headers),
-            'auth_header' => $authHeader ? 'present' : 'missing'
-        ]);
-
-        if (!$authHeader || !preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
-            Logger::warning('Missing or invalid Authorization header', ['auth_header' => $authHeader]);
-            self::sendResponse(['success' => false, 'message' => 'Authorization token required.'], 401);
-            return false;
-        }
-
-        $token = $matches[1];
-
-        try {
-            $secretKey = $_ENV['JWT_SECRET'];
-            if (empty($secretKey)) {
-                Logger::error('JWT_SECRET not configured');
-                throw new \Exception("JWT_SECRET is not configured.");
-            }
-
-            $decoded = JWT::decode($token, new Key($secretKey, 'HS256'));
-            Logger::info('JWT Authentication successful', ['user_id' => $decoded->data->id ?? 'unknown']);
-            return (array) $decoded->data;
-
-        } catch (\Exception $e) {
-            Logger::warning('JWT Authentication failed', [
-                'error' => $e->getMessage(),
-                'token_length' => strlen($token),
-                'token_start' => substr($token, 0, 20) . '...'
-            ]);
-            self::sendResponse(['success' => false, 'message' => 'Invalid or expired token.'], 401);
-            return false;
-        }
-    }
-
-    /**
-     * Notify Socket.io server about events
-     */
-    private static function notifySocketServer($event, $data)
-    {
-        try {
-            // Use curl to notify the Socket.io server
-            $socketUrl = 'https://offers.connex.team/api/notify';
-            $payload = json_encode([
-                'event' => $event,
-                'data' => $data
-            ]);
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $socketUrl);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Content-Type: application/json',
-                'Content-Length: ' . strlen($payload)
-            ]);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-            
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode !== 200) {
-                Logger::warning('Socket.io notification failed', [
-                    'event' => $event,
-                    'http_code' => $httpCode,
-                    'response' => $response
-                ]);
-            }
-
-        } catch (\Exception $e) {
-            Logger::error('Socket.io notification error', [
-                'event' => $event,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Send JSON response
-     */
-    private static function sendResponse($data, $statusCode = 200)
-    {
-        http_response_code($statusCode);
+    private static function json($data, $code = 200) {
+        http_response_code($code);
         header('Content-Type: application/json');
         echo json_encode($data);
+    }
+
+    /**
+     * Add missing columns to existing offers table if needed
+     */
+    private static function ensureColumns(PDO $db): void
+    {
+        // Check and add missing columns to existing offers table
+        $columnsToAdd = [
+            'pickup_datetime' => 'VARCHAR(64) NULL',
+            'delivery_datetime' => 'VARCHAR(64) NULL', 
+            'pieces' => 'INT NULL',
+            'invited_driver_ids' => 'TEXT NULL'
+        ];
+        
+        foreach ($columnsToAdd as $column => $definition) {
+            try {
+                $stmt = $db->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'offers' AND column_name = '$column'");
+                $exists = $stmt->fetchColumn();
+                if (!$exists) {
+                    $db->exec("ALTER TABLE offers ADD COLUMN $column $definition");
+                }
+            } catch (Exception $e) {
+                // Column might already exist or other issue - continue
+            }
+        }
+    }
+
+    public static function index()
+    {
+        try {
+            Auth::protect();
+            $db = Database::getConnection();
+            if (!$db) { throw new Exception('Database connection failed'); }
+            self::ensureColumns($db);
+
+            $stmt = $db->query("SELECT id, created_by, pickup_location, delivery_location, pickup_datetime, delivery_datetime, proposed_rate, pieces, weight_lbs, dimensions, distance_miles, status, notes, invited_driver_ids, created_at, updated_at FROM offers ORDER BY id DESC LIMIT 200");
+            $offers = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            // Decode invited_driver_ids JSON into array for convenience
+            foreach ($offers as &$o) {
+                if (isset($o['invited_driver_ids']) && is_string($o['invited_driver_ids']) && $o['invited_driver_ids'] !== '') {
+                    $decoded = json_decode($o['invited_driver_ids'], true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        $o['invited_driver_ids'] = array_values(array_map('intval', $decoded));
+                    } else {
+                        $o['invited_driver_ids'] = [];
+                    }
+                } else {
+                    $o['invited_driver_ids'] = [];
+                }
+            }
+            self::json(['success' => true, 'offers' => $offers]);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // POST /offers
+    public static function create()
+    {
+        try {
+            Auth::protect();
+            $db = Database::getConnection();
+            if (!$db) { throw new Exception('Database connection failed'); }
+            self::ensureColumns($db);
+
+            $payload = json_decode(file_get_contents('php://input'), true) ?: [];
+
+            // Basic validation
+            $pickup = trim($payload['pickupAddress'] ?? '');
+            $delivery = trim($payload['deliveryAddress'] ?? '');
+            if ($pickup === '' || $delivery === '') {
+                return self::json(['success' => false, 'message' => 'pickupAddress and deliveryAddress are required'], 400);
+            }
+
+            // Get current user ID from Auth
+            $currentUser = Auth::getCurrentUser();
+            $createdBy = $currentUser->id ?? null;
+
+            // Normalize inputs to match existing table structure
+            $pickupDt = $payload['pickupDateTime'] ?? null;      // plain text per UI
+            $deliveryDt = $payload['deliveryDateTime'] ?? null;  // plain text per UI
+            $rate = $payload['rate'] ?? ($payload['ratePerMile'] ?? null); // UI uses "Rate"
+            $pieces = isset($payload['pieces']) ? (int)$payload['pieces'] : null;
+            $weight = isset($payload['weight']) ? (float)$payload['weight'] : null;
+            $dims = $payload['dims'] ?? ($payload['DIMS'] ?? null);
+            $notes = $payload['notes'] ?? null;
+            $loadedMiles = isset($payload['loadedMiles']) && $payload['loadedMiles'] !== '' ? (float)$payload['loadedMiles'] : null;
+            $invitedDriverIds = $payload['driverIds'] ?? ($payload['selectedDrivers'] ?? []);
+            if (!is_array($invitedDriverIds)) { $invitedDriverIds = []; }
+            $invitedDriverIdsJson = json_encode(array_values(array_unique(array_map('intval', $invitedDriverIds))));
+
+            // Map to existing table columns
+            $sql = "INSERT INTO offers (
+                        created_by, pickup_location, delivery_location,
+                        pickup_datetime, delivery_datetime, proposed_rate, pieces, weight_lbs, dimensions,
+                        notes, distance_miles, invited_driver_ids, status
+                    ) VALUES (
+                        :created_by, :pickup_location, :delivery_location,
+                        :pickup_datetime, :delivery_datetime, :proposed_rate, :pieces, :weight_lbs, :dimensions,
+                        :notes, :distance_miles, :invited_driver_ids, 'active'
+                    )";
+
+            $stmt = $db->prepare($sql);
+            $stmt->execute([
+                ':created_by' => $createdBy,
+                ':pickup_location' => $pickup,
+                ':delivery_location' => $delivery,
+                ':pickup_datetime' => $pickupDt,
+                ':delivery_datetime' => $deliveryDt,
+                ':proposed_rate' => $rate ? (float)$rate : null,
+                ':pieces' => $pieces,
+                ':weight_lbs' => $weight,
+                ':dimensions' => $dims,
+                ':notes' => $notes,
+                ':distance_miles' => $loadedMiles,
+                ':invited_driver_ids' => $invitedDriverIdsJson,
+            ]);
+
+            $offerId = (int)$db->lastInsertId();
+
+            // Try to notify offers-server via webhook (best-effort)
+            try {
+                $offersServerUrl = $_ENV['OFFERS_SERVER_URL'] ?? null; // e.g. https://offers.connex.team
+                $webhookSecret = $_ENV['OFFERS_WEBHOOK_SECRET'] ?? null;
+                if ($offersServerUrl && $webhookSecret) {
+                    $offerForBroadcast = [
+                        'id' => $offerId,
+                        'pickup_location' => $pickup,
+                        'delivery_location' => $delivery,
+                        'pickup_datetime' => $pickupDt,
+                        'delivery_datetime' => $deliveryDt,
+                        'proposed_rate' => $rate,
+                        'pieces' => $pieces,
+                        'weight_lbs' => $weight,
+                        'dimensions' => $dims,
+                        'distance_miles' => $loadedMiles,
+                        'invited_driver_ids' => json_decode($invitedDriverIdsJson, true) ?: [],
+                        'created_at' => gmdate('c'),
+                    ];
+
+                    $payload = json_encode(['offer' => $offerForBroadcast], JSON_UNESCAPED_UNICODE);
+                    $ch = curl_init(rtrim($offersServerUrl, '/') . '/events/offer-created');
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                        'Content-Type: application/json',
+                        'X-Webhook-Secret: ' . $webhookSecret,
+                    ]);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+                    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 4);
+                    curl_exec($ch);
+                    curl_close($ch);
+                }
+            } catch (\Throwable $we) {
+                // best-effort; do not fail the request
+            }
+
+            self::json([
+                'success' => true,
+                'message' => 'Offer created',
+                'offer_id' => $offerId
+            ], 201);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // GET /offers/{id}
+    public static function show(int $id)
+    {
+        try {
+            Auth::protect();
+            $db = Database::getConnection();
+            if (!$db) { throw new Exception('Database connection failed'); }
+            self::ensureColumns($db);
+
+            $stmt = $db->prepare("SELECT * FROM offers WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            $offer = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$offer) { return self::json(['success' => false, 'message' => 'Offer not found'], 404); }
+            if (isset($offer['invited_driver_ids']) && is_string($offer['invited_driver_ids']) && $offer['invited_driver_ids'] !== '') {
+                $decoded = json_decode($offer['invited_driver_ids'], true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $offer['invited_driver_ids'] = array_values(array_map('intval', $decoded));
+                } else {
+                    $offer['invited_driver_ids'] = [];
+                }
+            } else {
+                $offer['invited_driver_ids'] = [];
+            }
+            self::json(['success' => true, 'offer' => $offer]);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // PUT /offers/{id}
+    public static function update(int $id)
+    {
+        try {
+            Auth::protect();
+            $db = Database::getConnection();
+            if (!$db) { throw new Exception('Database connection failed'); }
+            self::ensureColumns($db);
+
+            $payload = json_decode(file_get_contents('php://input'), true) ?: [];
+            // Build dynamic update - map to existing table columns
+            $fields = [
+                'pickup_location' => 'pickupAddress',
+                'delivery_location' => 'deliveryAddress',
+                'pickup_datetime' => 'pickupDateTime',
+                'delivery_datetime' => 'deliveryDateTime',
+                'proposed_rate' => 'rate',
+                'pieces' => 'pieces',
+                'weight_lbs' => 'weight',
+                'dimensions' => 'dims',
+                'notes' => 'notes',
+                'distance_miles' => 'loadedMiles',
+                'status' => 'status',
+            ];
+            $setParts = [];
+            $params = [':id' => $id];
+            foreach ($fields as $col => $key) {
+                if (array_key_exists($key, $payload)) {
+                    $setParts[] = "$col = :$col";
+                    $params[":$col"] = ($col === 'pieces' || $col === 'weight_lbs' || $col === 'distance_miles')
+                        ? ($payload[$key] === '' ? null : (float)$payload[$key])
+                        : $payload[$key];
+                }
+            }
+            if (array_key_exists('driverIds', $payload) || array_key_exists('selectedDrivers', $payload)) {
+                $ids = $payload['driverIds'] ?? $payload['selectedDrivers'];
+                if (!is_array($ids)) { $ids = []; }
+                $setParts[] = 'invited_driver_ids = :invited_driver_ids';
+                $params[':invited_driver_ids'] = json_encode(array_values(array_unique(array_map('intval', $ids))));
+            }
+            if (empty($setParts)) {
+                return self::json(['success' => false, 'message' => 'No updatable fields supplied'], 400);
+            }
+
+            $sql = 'UPDATE offers SET ' . implode(', ', $setParts) . ' WHERE id = :id';
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+            self::json(['success' => true, 'message' => 'Offer updated']);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // DELETE /offers/{id}
+    public static function delete(int $id)
+    {
+        try {
+            Auth::protect();
+            $db = Database::getConnection();
+            if (!$db) { throw new Exception('Database connection failed'); }
+            self::ensureColumns($db);
+            $stmt = $db->prepare('DELETE FROM offers WHERE id = :id');
+            $stmt->execute([':id' => $id]);
+            self::json(['success' => true, 'message' => 'Offer deleted']);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // POST /offers/{id}/send-to-drivers
+    public static function sendToDrivers(int $id)
+    {
+        try {
+            Auth::protect();
+            // For now, just acknowledge. Integration with offers-server can be added later via webhook/redis.
+            self::json(['success' => true, 'message' => 'Offer queued for delivery to drivers', 'offer_id' => $id]);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => 'Authentication failed'], 401);
+        }
+    }
+
+    // GET /offers/{id}/proposals
+    public static function listProposals(int $id)
+    {
+        try {
+            Auth::protect();
+            self::json(['success' => true, 'proposals' => []]);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => 'Authentication failed'], 401);
+        }
+    }
+
+    // PUT /proposals/{id}/respond
+    public static function respondToProposal(int $proposalId)
+    {
+        try {
+            Auth::protect();
+            self::json(['success' => true, 'message' => 'Proposals table not implemented yet'], 501);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => 'Authentication failed'], 401);
+        }
+    }
+
+    // POST /drivers/by-ids - Get driver details by IDs
+    public static function getDriversByIds()
+    {
+        try {
+            Auth::protect();
+            $db = Database::getConnection();
+            if (!$db) { throw new Exception('Database connection failed'); }
+
+            $payload = json_decode(file_get_contents('php://input'), true) ?: [];
+            $driverIds = $payload['driver_ids'] ?? [];
+            
+            if (!is_array($driverIds) || empty($driverIds)) {
+                return self::json(['success' => false, 'message' => 'driver_ids array is required'], 400);
+            }
+
+            // Sanitize IDs to integers
+            $cleanIds = array_values(array_unique(array_map('intval', $driverIds)));
+            $placeholders = str_repeat('?,', count($cleanIds) - 1) . '?';
+            
+            $sql = "SELECT ID as id, DriverName, TruckNumber, CellPhone, CityStateZip, Dimensions 
+                    FROM Trucks 
+                    WHERE ID IN ($placeholders)";
+            
+            $stmt = $db->prepare($sql);
+            $stmt->execute($cleanIds);
+            $drivers = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            // Transform to match frontend expectations
+            $driversFormatted = array_map(function($driver) {
+                return [
+                    'id' => (int)$driver['id'],
+                    'DriverName' => $driver['DriverName'] ?: 'N/A',
+                    'TruckNumber' => $driver['TruckNumber'] ?: 'N/A',
+                    'CellPhone' => $driver['CellPhone'] ?: 'N/A',
+                    'city_state_zip' => $driver['CityStateZip'] ?: 'N/A',
+                    'dimensions_payload' => $driver['Dimensions'] ?: 'N/A',
+                    'offerStatus' => 'not_sent',
+                    'isOnline' => false
+                ];
+            }, $drivers);
+
+            self::json(['success' => true, 'drivers' => $driversFormatted]);
+        } catch (Exception $e) {
+            self::json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
 }

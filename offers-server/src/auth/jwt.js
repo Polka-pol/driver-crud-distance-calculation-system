@@ -38,25 +38,35 @@ class JWTAuth {
      * @param {Object} socket - Socket.io socket instance
      * @param {Function} next - Next middleware function
      */
-    async authenticateSocket(socket, next) {
+    authenticateSocket = async (socket, next) => {
         try {
-            const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
-            
+            const bearer = socket.handshake.headers?.authorization;
+            const token = socket.handshake.auth?.token || (bearer && bearer.startsWith('Bearer ') ? bearer.slice(7) : undefined);
+
             if (!token) {
                 return next(new Error('Authentication token required'));
             }
 
             const result = await this.verifyToken(token);
-            
+
             if (!result.success) {
+                logger.warn(`Socket ${socket.id} failed auth: ${result.error}`);
                 return next(new Error('Invalid authentication token'));
             }
 
-            // Attach user info to socket
-            socket.userId = result.user.id;
-            socket.username = result.user.username;
-            socket.userRole = result.user.role;
-            socket.userType = result.user.role === 'admin' || result.user.role === 'dispatcher' ? 'dispatcher' : 'driver';
+            // Support payloads with user fields nested under `data`
+            const payload = result.user && typeof result.user === 'object' ? result.user : {};
+            const userData = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+
+            // Attach user info to socket (fallbacks for missing fields)
+            socket.userId = userData.id;
+            socket.username = userData.username || userData.fullName || 'unknown';
+            socket.userRole = userData.role || 'user';
+            socket.userType = socket.userRole === 'admin' || socket.userRole === 'dispatcher' ? 'dispatcher' : 'driver';
+
+            if (!socket.userId) {
+                logger.warn(`Authenticated token missing userId field (payload keys: ${Object.keys(userData).join(',')})`);
+            }
 
             logger.info(`Socket authenticated: ${socket.id} - User: ${socket.username} (${socket.userRole})`);
             next();

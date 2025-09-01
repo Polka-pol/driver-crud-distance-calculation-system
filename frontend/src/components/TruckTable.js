@@ -147,7 +147,7 @@ const TruckTable = ({
     const distanceText = getDistanceText(truck);
 
     return (
-      <div className="mobile-card">
+      <div className="mobile-card truck-table">
         <div className="mobile-card-header" onClick={() => toggleCard(truck.id)}>
           <div className="mobile-card-left">
             <input
@@ -261,9 +261,9 @@ const TruckTable = ({
   };
 
   return (
-    <div className="table-wrapper">
+    <div className="table-wrapper truck-table">
       {/* Mobile view */}
-      <div className="mobile-view">
+      <div className="mobile-view truck-table">
         <div className="mobile-header">
           <div className="mobile-header-left">
             <input
@@ -299,7 +299,7 @@ const TruckTable = ({
       </div>
 
       {/* Desktop table view */}
-      <table className="styled-table desktop-view">
+      <table className="styled-table desktop-view truck-table">
         <thead>
           <tr>
             <th className="col-select">

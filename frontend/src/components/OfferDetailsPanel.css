@@ -1,0 +1,147 @@
+.offer-details-panel {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin: 20px 0;
+  overflow: hidden;
+}
+
+.details-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.details-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.offer-status-badge .status-indicator {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+  text-transform: capitalize;
+}
+
+.no-offer-selected {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6c757d;
+}
+
+.details-content {
+  padding: 16px 20px;
+}
+
+.details-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.compact-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.compact-row:last-child {
+  border-bottom: none;
+}
+
+.compact-label {
+  font-weight: 600;
+  color: #495057;
+  font-size: 13px;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.compact-value {
+  color: #212529;
+  font-size: 13px;
+}
+
+.compact-separator {
+  color: #6c757d;
+  font-size: 12px;
+  margin: 0 4px;
+}
+
+.notes-section {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.notes-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 8px;
+}
+
+.notes-content {
+  color: #212529;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.timestamps-section {
+  border-top: 1px solid #e9ecef;
+  padding-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.timestamp-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timestamp-label {
+  font-size: 12px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.timestamp-value {
+  font-size: 12px;
+  color: #495057;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .details-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .compact-label {
+    min-width: 70px;
+  }
+  
+  .timestamps-section {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

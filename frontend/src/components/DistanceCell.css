@@ -1,12 +1,12 @@
 /* col-distance base styles are in TruckTable.css */
-.col-distance {
+.truck-table .col-distance {
   /* Add hardware acceleration for better performance */
   transform: translateZ(0);
   backface-visibility: hidden;
   perspective: 1000px;
 }
 
-.distance-info {
+.truck-table .distance-info {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -18,7 +18,16 @@
   will-change: transform;
 }
 
-.distance-value {
+/* Ensure no global styles interfere */
+.truck-table .col-distance:not(.truck-table .col-distance) {
+  /* Reset any conflicting styles */
+  background: none !important;
+  border: none !important;
+  padding: none !important;
+  margin: none !important;
+}
+
+.truck-table .distance-value {
   font-weight: 500;
   color: #2c5282;
   font-size: 0.75rem;
@@ -28,24 +37,24 @@
   -webkit-font-smoothing: antialiased;
 }
 
-.eta-value {
+.truck-table .eta-value {
   font-size: 0.65rem;
   color: #4a5568;
 }
 
-.eta-value.calculating {
+.truck-table .eta-value.calculating {
   color: #718096;
   font-style: italic;
 }
 
 /* Style for empty distance value */
-.distance-value:empty,
-.distance-value:only-child {
+.truck-table .distance-value:empty,
+.truck-table .distance-value:only-child {
   color: #718096;
   font-style: italic;
 }
 
-.source-badge {
+.truck-table .source-badge {
   display: inline-block;
   padding: 1px 4px;
   border-radius: 2px;
@@ -62,23 +71,23 @@
 }
 
 /* Pre-defined badge styles */
-.source-badge-cache {
+.truck-table .source-badge-cache {
   background-color: #4CAF50 !important;
 }
 
-.source-badge-mapbox {
+.truck-table .source-badge-mapbox {
   background-color: #2196F3 !important;
 }
 
-.source-badge-preliminary {
+.truck-table .source-badge-preliminary {
   background-color: #FF9800 !important;
 }
 
-.source-badge-no-coords-available {
+.truck-table .source-badge-no-coords-available {
   background-color: #9E9E9E !important;
 }
 
 /* Optimize hover effects */
-.source-badge:hover {
+.truck-table .source-badge:hover {
   opacity: 0.9;
 } 

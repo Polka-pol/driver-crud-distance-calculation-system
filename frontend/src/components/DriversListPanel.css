@@ -1,0 +1,289 @@
+.drivers-panel {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+}
+
+.drivers-panel .panel-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.drivers-panel .panel-header h3 {
+  margin: 0;
+  color: #212529;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.drivers-panel .drivers-count {
+  background: #e9ecef;
+  color: #6c757d;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.drivers-panel .panel-filters {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e9ecef;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.drivers-panel .filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.drivers-panel .filter-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.drivers-panel .filter-group select {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+}
+
+.drivers-panel .filter-group select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.drivers-panel .drivers-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: block;
+  height: 520px;
+  min-height: 520px;
+  max-height: 520px;
+}
+
+.drivers-panel .driver-item {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+  height: 140px;
+  overflow: hidden;
+}
+
+.drivers-panel .driver-item:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+}
+
+.drivers-panel .driver-item.selected {
+  border-color: #007bff;
+  background: #f8f9ff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
+}
+
+.drivers-panel .driver-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.drivers-panel .driver-info {
+  flex: 1;
+}
+
+.drivers-panel .driver-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #212529;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drivers-panel .online-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.drivers-panel .online-indicator.online {
+  background: #28a745;
+}
+
+.drivers-panel .online-indicator.offline {
+  background: #6c757d;
+}
+
+.drivers-panel .truck-number {
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.drivers-panel .status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.drivers-panel .driver-details {
+  margin-bottom: 8px;
+  height: 70px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drivers-panel .detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+  font-size: 13px;
+  height: 20px;
+  overflow: hidden;
+}
+
+.drivers-panel .detail-label {
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.drivers-panel .detail-value {
+  color: #212529;
+  font-weight: 600;
+  text-align: right;
+  max-width: 60%;
+  word-break: break-word;
+}
+
+.drivers-panel .driver-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+
+
+.drivers-panel .send-offer-btn {
+  padding: 6px 12px;
+  border: 1px solid #007bff;
+  background: white;
+  color: #007bff;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.drivers-panel .send-offer-btn:hover {
+  background: #007bff;
+  color: white;
+}
+
+.drivers-panel .no-offer-selected,
+.drivers-panel .no-drivers,
+.drivers-panel .empty-table-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+  font-style: italic;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Scrollbar styling */
+.drivers-panel .drivers-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.drivers-panel .drivers-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.drivers-panel .drivers-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.drivers-panel .drivers-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .drivers-panel .panel-header {
+    padding: 16px 20px;
+  }
+  
+  .drivers-panel .panel-header h3 {
+    font-size: 18px;
+  }
+  
+  .drivers-panel .panel-filters {
+    padding: 12px 20px;
+  }
+  
+  .drivers-panel .drivers-list {
+    padding: 12px 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .drivers-panel .driver-item {
+    padding: 10px;
+    margin-bottom: 6px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .drivers-panel .driver-header {
+    margin-bottom: 6px;
+  }
+  
+  .drivers-panel .driver-details {
+    margin-bottom: 6px;
+  }
+  
+  .drivers-panel .online-indicator {
+    width: 6px;
+    height: 6px;
+  }
+}

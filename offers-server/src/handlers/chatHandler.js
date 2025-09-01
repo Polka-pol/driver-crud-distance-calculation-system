@@ -74,9 +74,11 @@ class ChatHandler {
                 messageType
             });
             
-            // Broadcast to room
+            // Broadcast to room (include routing identifiers)
             const messageData = {
                 id: messageId,
+                offerId,
+                driverId,
                 message: message.trim(),
                 messageType,
                 senderType: socket.userType,
@@ -85,16 +87,19 @@ class ChatHandler {
                 timestamp: new Date().toISOString(),
                 isRead: false
             };
-            
+
             this.io.to(roomName).emit('receive_message', messageData);
             logger.info(`Message ${messageId} sent by ${socket.username} in room ${roomName}`);
             
             // Clear typing indicator
             await redisDB.setTypingIndicator(roomName, socket.userId, false);
             socket.to(roomName).emit('user_typing', { 
+                offerId,
+                driverId,
                 userId: socket.userId, 
                 username: socket.username,
-                typing: false 
+                typing: false,
+                isTyping: false
             });
             
         } catch (error) {
@@ -113,9 +118,12 @@ class ChatHandler {
             
             await redisDB.setTypingIndicator(roomName, socket.userId, true);
             socket.to(roomName).emit('user_typing', { 
+                offerId,
+                driverId,
                 userId: socket.userId, 
                 username: socket.username,
-                typing: true 
+                typing: true,
+                isTyping: true 
             });
         } catch (error) {
             logger.error('Error setting typing indicator:', error);
@@ -132,9 +140,12 @@ class ChatHandler {
             
             await redisDB.setTypingIndicator(roomName, socket.userId, false);
             socket.to(roomName).emit('user_typing', { 
+                offerId,
+                driverId,
                 userId: socket.userId, 
                 username: socket.username,
-                typing: false 
+                typing: false,
+                isTyping: false 
             });
         } catch (error) {
             logger.error('Error removing typing indicator:', error);

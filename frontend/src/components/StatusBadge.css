@@ -1,4 +1,6 @@
-.status-badge {
+/* Status Badge - More specific to avoid conflicts */
+.truck-table .status-badge,
+.mobile-card .status-badge {
   display: inline-block;
   padding: 2px 4px;
   border-radius: 3px;
@@ -11,7 +13,8 @@
   transition: all 0.2s ease;
 }
 
-.status-badge:hover {
+.truck-table .status-badge:hover,
+.mobile-card .status-badge:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgb(0 0 0 / 15%);
   filter: brightness(1.1);

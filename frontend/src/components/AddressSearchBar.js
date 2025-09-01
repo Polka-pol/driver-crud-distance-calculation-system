@@ -14,7 +14,7 @@ const AddressSearchBar = ({ query, onQueryChange, onSelect, placeholder, hideRec
 
     // Main suggestions loading
     useEffect(() => {
-        if (query.length < 3) {
+        if (!query || query.length < 3) {
             setSuggestions([]);
             setRecentSearches([]);
             setError(null);
@@ -35,7 +35,7 @@ const AddressSearchBar = ({ query, onQueryChange, onSelect, placeholder, hideRec
 
     // Load recent searches alongside main suggestions to prevent flickering
     useEffect(() => {
-        if (query.length >= 3 && !hideRecentInfo) {
+        if (query && query.length >= 3 && !hideRecentInfo) {
             // Load recent searches with same debounce timing as main suggestions
             const handler = setTimeout(async () => {
                 if (currentQuery.current === query) {

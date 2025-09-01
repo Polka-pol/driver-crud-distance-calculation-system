@@ -14,6 +14,8 @@ import AdminPage from './components/AdminPage';
 import DispatcherDashboard from './components/DispatcherDashboard';
 import DriverUpdates from './components/DriverUpdates';
 import MapPage from './components/MapPage';
+import OffersPage from './components/OffersPage';
+import CreateOfferModal from './components/CreateOfferModal';
 import ServerTime from './components/ServerTime';
 import { isAuthenticated, logout, getCurrentUser } from './utils/auth';
 import { apiClient, fetchMyPermissions } from './utils/apiClient';
@@ -21,6 +23,7 @@ import { API_BASE_URL } from './config';
 import { PermissionsProvider } from './context/PermissionsContext';
 import { getCurrentEDT, setAppTimezone, parseAppTzDateTimeToEpochMs } from './utils/timeUtils';
 import { useModalScrollLock } from './utils/modalScrollLock';
+import { SocketProvider } from './context/SocketProvider';
 
 function App() {
   const [user, setUser] = useState(getCurrentUser());
@@ -76,6 +79,11 @@ function App() {
   const [isTimeSyncing, setIsTimeSyncing] = useState(false);
   const [permissions, setPermissions] = useState([]);
   const hasPermission = (key) => Array.isArray(permissions) && (permissions.includes('*') || permissions.includes(key));
+  
+  // CreateOfferModal state
+  const [showCreateOfferModal, setShowCreateOfferModal] = useState(false);
+  const [selectedDriversForOffer, setSelectedDriversForOffer] = useState([]);
+  const [modalPickupAddress, setModalPickupAddress] = useState('');
 
   const handleLoginSuccess = (userData) => {
     console.log('Login success - user data:', userData);
@@ -815,6 +823,32 @@ function App() {
     }
   };
 
+  const handleMakeOffer = () => {
+    if (selectedTrucks.length === 0) return;
+
+    // selectedTrucks contains IDs; look up each truck object
+    const driversForOffer = selectedTrucks
+      .map((truckId) => {
+        const t = trucks.find(tr => tr.id === truckId);
+        if (!t) return null;
+        // Only ID is required by CreateOfferModal to build driverIds payload
+        return { ID: Number(t.id) };
+      })
+      .filter(Boolean);
+
+    // Copy current search query value directly
+    setModalPickupAddress(searchQuery || '');
+    setSelectedDriversForOffer(driversForOffer);
+    setShowCreateOfferModal(true);
+  };
+
+
+  const handleCloseCreateOfferModal = () => {
+    setShowCreateOfferModal(false);
+    setSelectedDriversForOffer([]);
+    setModalPickupAddress('');
+  };
+
   // If not authenticated, show the login page
   if (!isAuth) {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
@@ -822,9 +856,10 @@ function App() {
 
   // --- Main App Render ---
   return (
-    <div className="app-bg">
-      <div className="container">
-        <PermissionsProvider permissions={permissions}>
+    <SocketProvider>
+      <div className="app-bg">
+        <div className="container">
+          <PermissionsProvider permissions={permissions}>
         <div className="app-header">
           <div className="header-left">
             <h1>Connex Transport</h1>
@@ -852,6 +887,9 @@ function App() {
               </button>
               <button onClick={() => setView('driver-updates')} className="header-btn driver-updates-btn" disabled={!hasPermission('driver.updates.view')}>
                 <span className="btn-text">Driver Updates</span>
+              </button>
+              <button onClick={() => setView('offers')} className="header-btn offers-btn">
+                <span className="btn-text">Offers</span>
               </button>
               {hasPermission('dashboard.analytics.view') && (
                 <button onClick={() => setView('admin')} className="header-btn admin-btn">
@@ -929,6 +967,13 @@ function App() {
                       title="Copy phone numbers of selected trucks"
                     >
                       📋 Copy
+                    </button>
+                    <button 
+                      className="action-btn make-offer-btn"
+                      onClick={handleMakeOffer}
+                      title="Create offer for selected trucks"
+                    >
+                      New Offer
                     </button>
                     <button 
                       className="reset-btn" 
@@ -1032,10 +1077,22 @@ function App() {
                <DriverUpdates onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
          ) : view === 'map' ? (
           <MapPage onBack={() => setView('main')} user={user} serverTimeOffset={serverTimeOffset} />
+        ) : view === 'offers' ? (
+          <OffersPage onBack={() => setView('main')} user={user} />
         ) : null}
-        </PermissionsProvider>
+          </PermissionsProvider>
+        </div>
+        
+        {/* CreateOfferModal - rendered on top of main page */}
+        <CreateOfferModal
+          isOpen={showCreateOfferModal}
+          onClose={handleCloseCreateOfferModal}
+          selectedDrivers={selectedDriversForOffer}
+          pickupAddress={modalPickupAddress}
+          onOfferCreated={() => setSelectedTrucks([])}
+        />
       </div>
-    </div>
+    </SocketProvider>
   );
 }
 

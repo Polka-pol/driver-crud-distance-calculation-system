@@ -1,0 +1,520 @@
+/* New minimal design for CreateOfferModal */
+.create-offer-modal-new {
+  max-width: 500px;
+  width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  border: 1px solid #e1e5e9;
+}
+
+.modal-header-new {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e1e5e9;
+  background: #f8f9fa;
+}
+
+.modal-header-new h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #6c757d;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+  background-color: #e9ecef;
+}
+
+.modal-body-new {
+  padding: 20px;
+}
+
+.drivers-count {
+  background: #e3f2fd;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #1565c0;
+  text-align: center;
+}
+
+.offer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #495057;
+  margin: 0;
+}
+
+/* Address inputs with suggestions */
+.address-input-container {
+  position: relative;
+}
+
+.address-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.address-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+}
+
+.loading-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+}
+
+.suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ced4da;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.suggestion-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f1f3f4;
+  transition: background-color 0.2s;
+}
+
+.suggestion-item:hover {
+  background-color: #f8f9fa;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-flag {
+  font-size: 16px;
+}
+
+.suggestion-text {
+  font-size: 13px;
+  color: #495057;
+  flex: 1;
+}
+
+/* Date inputs */
+.date-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.date-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+}
+
+.quick-date-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.quick-btn {
+  padding: 6px 10px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.quick-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+/* Miles input */
+.miles-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.miles-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.miles-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+}
+
+.calc-btn {
+  padding: 10px 16px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.calc-btn:hover:not(:disabled) {
+  background: #218838;
+}
+
+.calc-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+/* Rate input */
+.rate-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.rate-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+}
+
+/* Notes textarea */
+.notes-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.notes-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+}
+
+/* Action buttons */
+.form-actions-new {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e1e5e9;
+}
+
+.cancel-btn-new {
+  flex: 1;
+  padding: 12px 20px;
+  background: #f8f9fa;
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn-new:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.submit-btn-new {
+  flex: 2;
+  padding: 12px 20px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.submit-btn-new:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.submit-btn-new:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+/* Responsive design */
+@media (max-width: 576px) {
+  .create-offer-modal-new {
+    width: 95vw;
+    margin: 10px;
+  }
+  
+  .modal-body-new {
+    padding: 16px;
+  }
+  
+  .date-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .quick-date-buttons {
+    justify-content: center;
+  }
+  
+  .miles-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .form-actions-new {
+    flex-direction: column;
+  }
+}
+
+/* Legacy styles */
+.create-offer-modal {
+  max-width: 800px;
+  width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.create-offer-modal .selected-drivers-info {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  border: 1px solid #e9ecef;
+}
+
+.create-offer-modal .selected-drivers-info h3 {
+  margin: 0 0 12px 0;
+  color: #495057;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.create-offer-modal .drivers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.create-offer-modal .driver-item {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
+
+.create-offer-modal .driver-name {
+  font-weight: 600;
+  color: #212529;
+  font-size: 14px;
+}
+
+.create-offer-modal .truck-number {
+  color: #6c757d;
+  font-size: 12px;
+}
+
+.create-offer-modal .form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.create-offer-modal .form-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.create-offer-modal .form-group.full-width {
+  flex: 1 1 100%;
+}
+
+.create-offer-modal .form-group label {
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.create-offer-modal .form-group input,
+.create-offer-modal .form-group textarea {
+  padding: 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.create-offer-modal .form-group input:focus,
+.create-offer-modal .form-group textarea:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.create-offer-modal .form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.create-offer-modal .distance-info {
+  background: #e3f2fd;
+  border: 1px solid #bbdefb;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.create-offer-modal .distance-label {
+  font-weight: 600;
+  color: #1976d2;
+}
+
+.create-offer-modal .distance-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1565c0;
+}
+
+.create-offer-modal .form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.cancel-button {
+  padding: 12px 24px;
+  border: 1px solid #6c757d;
+  background: white;
+  color: #6c757d;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-button:hover {
+  background: #f8f9fa;
+  border-color: #5a6268;
+}
+
+.submit-button {
+  padding: 12px 24px;
+  border: none;
+  background: #007bff;
+  color: white;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.submit-button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.submit-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .drivers-list {
+    justify-content: center;
+  }
+}
