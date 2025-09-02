@@ -81,6 +81,69 @@ app.post('/events/message-sent', express.json(), (req, res) => {
     }
 });
 
+// Webhook endpoint for hold placed
+app.post('/events/hold-placed', express.json(), (req, res) => {
+    try {
+        const webhookSecret = req.headers['x-webhook-secret'];
+        if (webhookSecret !== process.env.WEBHOOK_SECRET) {
+            logger.warn('Invalid webhook secret for hold-placed');
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { truckId, dispatcherId, dispatcherName, startedAt } = req.body;
+        logger.info('Received hold-placed webhook:', { truckId, dispatcherId, dispatcherName });
+
+        // Store hold in Redis
+        redisDB.setTruckHold(truckId, {
+            dispatcherId,
+            dispatcherName,
+            truckId
+        });
+
+        // Broadcast to all connected clients
+        io.emit('hold_placed', {
+            truckId,
+            dispatcherId,
+            dispatcherName,
+            startedAt
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        logger.error('Error processing hold-placed webhook:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Webhook endpoint for hold removed
+app.post('/events/hold-removed', express.json(), (req, res) => {
+    try {
+        const webhookSecret = req.headers['x-webhook-secret'];
+        if (webhookSecret !== process.env.WEBHOOK_SECRET) {
+            logger.warn('Invalid webhook secret for hold-removed');
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { truckId, dispatcherId, removedAt } = req.body;
+        logger.info('Received hold-removed webhook:', { truckId, dispatcherId });
+
+        // Remove hold from Redis
+        redisDB.removeTruckHold(truckId);
+
+        // Broadcast to all connected clients
+        io.emit('hold_removed', {
+            truckId,
+            dispatcherId,
+            removedAt
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        logger.error('Error processing hold-removed webhook:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Rate limiting configuration
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -261,6 +324,160 @@ io.on('connection', async (socket) => {
         socket.emit('heartbeat_ack', { timestamp: new Date().toISOString() });
     });
     
+    // Hold system events
+    socket.on('place_hold', async (data) => {
+        try {
+            const { truckId, dispatcherId } = data;
+            const dispatcherName = socket.fullName || 'Unknown';
+            
+            if (!truckId || !dispatcherId || !dispatcherName) {
+                socket.emit('hold_error', { message: 'Missing required fields' });
+                return;
+            }
+
+            // Check if truck already has an active hold
+            const existingHold = await redisDB.getTruckHold(truckId);
+            if (existingHold) {
+                socket.emit('hold_error', { message: 'Truck already has an active hold' });
+                return;
+            }
+
+            // Call PHP API to place hold in MySQL database
+            try {
+                const phpApiUrl = process.env.PHP_API_URL || 'https://connex.team/api';
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Socket-Request': 'true' // Identify this as Socket.io request
+                };
+
+                // Add JWT token if available from socket auth
+                if (socket.token) {
+                    headers['Authorization'] = `Bearer ${socket.token}`;
+                }
+
+                const response = await fetch(`${phpApiUrl}/trucks/${truckId}/hold`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        dispatcher_id: dispatcherId,
+                        dispatcher_name: socket.fullName || 'Unknown'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`PHP API responded with status: ${response.status}`);
+                }
+
+                logger.info('Successfully placed hold in MySQL via PHP API:', { truckId, dispatcherId, dispatcherName });
+            } catch (apiError) {
+                logger.error('Failed to place hold via PHP API:', apiError);
+                socket.emit('hold_error', { message: 'Failed to sync with database' });
+                return;
+            }
+
+            // Set hold in Redis with TTL
+            await redisDB.setTruckHold(truckId, {
+                dispatcherId,
+                dispatcherName,
+                truckId
+            });
+
+            // Broadcast to all clients
+            const startedAt = new Date().toISOString();
+            io.emit('hold_placed', {
+                truckId,
+                dispatcherId,
+                dispatcherName,
+                startedAt
+            });
+
+            logger.info('Hold placed via Socket.io:', { truckId, dispatcherId, dispatcherName });
+        } catch (error) {
+            logger.error('Error placing hold:', error);
+            socket.emit('hold_error', { message: 'Failed to place hold' });
+        }
+    });
+    
+    socket.on('remove_hold', async (data) => {
+        try {
+            const { truckId, dispatcherId } = data;
+            
+            if (!truckId || !dispatcherId) {
+                socket.emit('hold_error', { message: 'Missing truckId or dispatcherId' });
+                return;
+            }
+
+            // Get current hold to verify ownership
+            const currentHold = await redisDB.getTruckHold(truckId);
+            if (!currentHold) {
+                socket.emit('hold_error', { message: 'No active hold found' });
+                return;
+            }
+
+            if (currentHold.dispatcherId !== dispatcherId) {
+                socket.emit('hold_error', { message: 'Cannot remove hold placed by another dispatcher' });
+                return;
+            }
+
+            // Call PHP API to remove hold from MySQL database
+            try {
+                const phpApiUrl = process.env.PHP_API_URL || 'https://connex.team/api';
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Socket-Request': 'true' // Identify this as Socket.io request
+                };
+
+                // Add JWT token if available from socket auth
+                if (socket.token) {
+                    headers['Authorization'] = `Bearer ${socket.token}`;
+                }
+
+                const response = await fetch(`${phpApiUrl}/trucks/${truckId}/hold`, {
+                    method: 'DELETE',
+                    headers,
+                    body: JSON.stringify({
+                        dispatcher_id: dispatcherId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`PHP API responded with status: ${response.status}`);
+                }
+
+                logger.info('Successfully removed hold from MySQL via PHP API:', { truckId, dispatcherId });
+            } catch (apiError) {
+                logger.error('Failed to remove hold from PHP API:', apiError);
+                socket.emit('hold_error', { message: 'Failed to sync with database' });
+                return;
+            }
+
+            // Remove hold from Redis
+            await redisDB.removeTruckHold(truckId);
+
+            // Broadcast to all clients
+            io.emit('hold_removed', {
+                truckId,
+                dispatcherId,
+                removedAt: new Date().toISOString()
+            });
+
+            logger.info('Hold removed via Socket.io:', { truckId, dispatcherId });
+        } catch (error) {
+            logger.error('Error removing hold via Socket.io:', error);
+            socket.emit('hold_error', { message: 'Failed to remove hold' });
+        }
+    });
+    
+    socket.on('get_active_holds', async () => {
+        try {
+            const activeHolds = await redisDB.getAllActiveHolds();
+            socket.emit('active_holds', activeHolds);
+        } catch (error) {
+            logger.error('Error getting active holds:', error);
+            socket.emit('hold_error', { message: 'Failed to get active holds' });
+        }
+    });
+
     // Test event
     socket.on('ping', (data) => {
         socket.emit('pong', { 
@@ -293,11 +510,63 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const PORT = process.env.PORT || 3001;
 
+// Setup hold expiration handler using Redis key notifications
+async function setupHoldExpirationHandler() {
+    // Реєструємо обробник подій закінчення hold
+    redisDB.onHoldExpired(async (data) => {
+        try {
+            const { truckId, expiredAt } = data;
+            
+            // Синхронізація з MySQL - видалення hold в базі даних
+            try {
+                const phpApiUrl = process.env.PHP_API_URL || 'https://connex.team/api';
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Socket-Request': 'true',
+                    'X-Webhook-Secret': process.env.WEBHOOK_SECRET
+                };
+                
+                // Використовуємо спеціальний системний запит для автоматичного зняття hold
+                const response = await fetch(`${phpApiUrl}/trucks/${truckId}/hold/expire`, {
+                    method: 'DELETE',
+                    headers,
+                    body: JSON.stringify({
+                        expired_at: expiredAt
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`PHP API responded with status: ${response.status}`);
+                }
+                
+                logger.info(`Successfully synchronized expired hold with MySQL for truck ${truckId}`);
+            } catch (apiError) {
+                logger.error(`Failed to synchronize expired hold with MySQL for truck ${truckId}:`, apiError);
+            }
+            
+            // Broadcast hold_expired event to all clients
+            io.emit('hold_expired', {
+                truckId,
+                expiredAt
+            });
+            
+            logger.info(`Hold expired event emitted for truck ${truckId}`);
+        } catch (error) {
+            logger.error('Error handling hold expiration:', error);
+        }
+    });
+    
+    logger.info('Hold expiration handler setup complete');
+}
+
 // Start server with database initialization
 async function startServer() {
     try {
         // Initialize database connections first
         await initializeConnections();
+        
+        // Setup hold expiration handler
+        await setupHoldExpirationHandler();
         
         // Start HTTP server
         server.listen(PORT, () => {
@@ -305,6 +574,7 @@ async function startServer() {
             logger.info(`📡 Health check: https://offers.connex.team/health`);
             logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
             logger.info(`💾 Database connections: MySQL ✅ Redis ✅`);
+            logger.info(`⏰ Hold monitoring: Active (Redis key notifications)`);
         });
     } catch (error) {
         logger.error('Failed to start server:', error);

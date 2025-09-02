@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { parseAppTzDateTimeToEpochMs, getCurrentTimeInAppTZ } from '../utils/timeUtils';
+import { useSocket } from '../context/SocketProvider';
 
 const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpired, serverTimeOffset = 0 }) => {
   // Component for displaying hold status and countdown timer using EDT timezone
   const [timeLeft, setTimeLeft] = useState(null);
   const [showHoldButton, setShowHoldButton] = useState(false);
   const [hasTriggeredExpired, setHasTriggeredExpired] = useState(false);
+  const { socket, isConnected } = useSocket();
 
   const isOnHold = truck.hold_status === 'active';
   const canRemoveHold = truck.hold_dispatcher_id === currentUserId;
@@ -21,10 +23,19 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
   // Calculate time remaining with real-time countdown using App TZ robust parsing and epoch math
   useEffect(() => {
     if (!isOnHold || !truck.hold_started_at) {
+      // Очищаємо інтервал, якщо він існує
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       setTimeLeft(null);
       setHasTriggeredExpired(false);
       return;
     }
+    
+    // Зберігаємо ID поточної вантажівки для перевірки в cleanup функції
+    // eslint-disable-next-line no-unused-vars
+    const currentTruckId = truck.id;
 
     // Parse hold start time using existing timeUtils
     const startEpoch = parseAppTzDateTimeToEpochMs(truck.hold_started_at);
@@ -102,6 +113,44 @@ const HoldCell = ({ truck, currentUserId, onHoldClick, onRemoveHold, onHoldExpir
       setHasTriggeredExpired(false);
     }
   }, [isOnHold]);
+
+  // Socket.io event handlers for real-time hold updates
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleHoldPlaced = (data) => {
+      if (data.truckId === truck.id) {
+        // Update will come from parent component via truck prop update
+        console.log(`Hold placed on truck ${truck.id} via Socket.io`);
+      }
+    };
+
+    const handleHoldRemoved = (data) => {
+      if (data.truckId === truck.id) {
+        // Update will come from parent component via truck prop update
+        console.log(`Hold removed from truck ${truck.id} via Socket.io`);
+      }
+    };
+
+    const handleHoldExpired = (data) => {
+      if (data.truckId === truck.id) {
+        console.log(`Hold expired on truck ${truck.id} via Socket.io`);
+        if (onHoldExpired) {
+          onHoldExpired(truck.id);
+        }
+      }
+    };
+
+    socket.on('hold_placed', handleHoldPlaced);
+    socket.on('hold_removed', handleHoldRemoved);
+    socket.on('hold_expired', handleHoldExpired);
+
+    return () => {
+      socket.off('hold_placed', handleHoldPlaced);
+      socket.off('hold_removed', handleHoldRemoved);
+      socket.off('hold_expired', handleHoldExpired);
+    };
+  }, [socket, isConnected, truck.id, onHoldExpired]);
 
   const handleHoldClick = () => {
     if (onHoldClick) {

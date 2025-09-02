@@ -339,6 +339,31 @@ if ($apiRoute === '/trucks/hold/cleanup' && $requestMethod === 'GET') {
     exit();
 }
 
+// Route for handling hold expiration from Redis key expiration events
+if (preg_match('/^\/trucks\/(\d+)\/hold\/expire$/', $apiRoute, $matches) && $requestMethod === 'DELETE') {
+    $truckId = (int)$matches[1];
+    
+    // Special case: Allow this endpoint to be called from Socket.io server with webhook secret
+    if (isset($_SERVER['HTTP_X_SOCKET_REQUEST']) && isset($_SERVER['HTTP_X_WEBHOOK_SECRET'])) {
+        if (!isset($_ENV['WEBHOOK_SECRET']) || empty($_ENV['WEBHOOK_SECRET'])) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'WEBHOOK_SECRET is not configured on the server']);
+            exit();
+        }
+        if ($_SERVER['HTTP_X_WEBHOOK_SECRET'] === $_ENV['WEBHOOK_SECRET']) {
+            // Skip normal auth for system-to-system calls
+            TruckController::expireHold($truckId);
+            exit();
+        }
+    }
+    
+    // Normal auth flow if not from Socket.io server
+    Auth::protect();
+    Authz::require('trucks.hold.manage');
+    TruckController::expireHold($truckId);
+    exit();
+}
+
 // Route for getting server time and hold countdowns
 if ($apiRoute === '/trucks/hold/time' && $requestMethod === 'GET') {
     Auth::protect();

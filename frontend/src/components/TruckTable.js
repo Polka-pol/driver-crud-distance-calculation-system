@@ -3,6 +3,7 @@ import { usePermissions } from '../context/PermissionsContext';
 import DistanceCell from './DistanceCell';
 import StatusBadge from './StatusBadge';
 import HoldCell from './HoldCell';
+import { getDisplayPhoneNumber } from '../utils/holdUtils';
 // No date formatting here; show raw WhenWillBeThere as stored
 import './TruckTable.css';
 
@@ -208,20 +209,20 @@ const TruckTable = ({
               <span className="mobile-detail-label">Contact phone:</span>
               <span 
                 className="mobile-detail-value mobile-phone"
-                onClick={() => handlePhoneClick(truck.contactphone)}
+                onClick={() => handlePhoneClick(getDisplayPhoneNumber(truck.contactphone, truck, currentUserId))}
                 title="Click to copy contact phone"
               >
-                {truck.contactphone}
+                {getDisplayPhoneNumber(truck.contactphone, truck, currentUserId)}
               </span>
             </div>
             <div className="mobile-detail-row">
               <span className="mobile-detail-label">Cell phone:</span>
               <span 
                 className="mobile-detail-value mobile-phone"
-                onClick={() => handlePhoneClick(truck.cell_phone)}
+                onClick={() => handlePhoneClick(getDisplayPhoneNumber(truck.cell_phone, truck, currentUserId))}
                 title="Click to copy cell phone"
               >
-                {truck.cell_phone}
+                {getDisplayPhoneNumber(truck.cell_phone, truck, currentUserId)}
               </span>
             </div>
             <div className="mobile-detail-row">
@@ -386,8 +387,8 @@ const TruckTable = ({
               </td>
               <td className="col-when">{formatArrivalRaw(truck.arrival_time)}</td>
               <td className="col-driver">{truck.driver_name}</td>
-              <td className="col-contact">{truck.contactphone}</td>
-              <td className="col-cell">{truck.cell_phone}</td>
+              <td className="col-contact">{getDisplayPhoneNumber(truck.contactphone, truck, currentUserId)}</td>
+              <td className="col-cell">{getDisplayPhoneNumber(truck.cell_phone, truck, currentUserId)}</td>
               <td 
                 className="col-city location-clickable" 
                 onClick={() => onLocationClick && onLocationClick(truck)}

@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 class RedisConnection {
     constructor() {
         this.client = null;
+        this.subscriber = null; // Окремий клієнт для підписок
         this.config = {
             host: process.env.REDIS_HOST || '127.0.0.1',
             port: process.env.REDIS_PORT || 6379,
@@ -14,6 +15,7 @@ class RedisConnection {
             enableReadyCheck: false,
             maxRetriesPerRequest: null,
         };
+        this.keyExpirationHandlers = new Map(); // Обробники подій закінчення ключів
     }
 
     /**
@@ -21,19 +23,34 @@ class RedisConnection {
      */
     async connect() {
         try {
+            // Основний клієнт для операцій
             this.client = new Redis(this.config);
             
             this.client.on('connect', () => {
-                logger.info('Redis connected');
+                logger.info('Redis main client connected');
             });
             
             this.client.on('error', (error) => {
-                logger.error('Redis connection error:', error);
+                logger.error('Redis main client error:', error);
             });
+            
+            // Окремий клієнт для підписок на події
+            this.subscriber = new Redis(this.config);
+            
+            this.subscriber.on('connect', () => {
+                logger.info('Redis subscriber client connected');
+            });
+            
+            this.subscriber.on('error', (error) => {
+                logger.error('Redis subscriber client error:', error);
+            });
+            
+            // Налаштування підписки на події закінчення ключів
+            await this.setupKeyExpirationEvents();
             
             // Test connection
             await this.client.ping();
-            logger.info('Redis connection established');
+            logger.info('Redis connections established');
             return true;
         } catch (error) {
             logger.error('Redis connection failed:', error);
@@ -201,12 +218,157 @@ class RedisConnection {
     }
 
     /**
+     * Set truck hold with TTL (15 minutes)
+     * @param {number} truckId - Truck ID
+     * @param {Object} holdData - Hold information
+     */
+    async setTruckHold(truckId, holdData) {
+        try {
+            const key = `hold:truck:${truckId}`;
+            const ttl = 15 * 60; // 15 minutes in seconds
+            await this.client.setex(key, ttl, JSON.stringify({
+                ...holdData,
+                startedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + ttl * 1000).toISOString()
+            }));
+            logger.info(`Hold set for truck ${truckId} with TTL ${ttl}s`);
+        } catch (error) {
+            logger.error('Error setting truck hold:', error);
+        }
+    }
+
+    /**
+     * Get truck hold information
+     * @param {number} truckId - Truck ID
+     * @returns {Promise<Object|null>} - Hold data
+     */
+    async getTruckHold(truckId) {
+        try {
+            const key = `hold:truck:${truckId}`;
+            const data = await this.client.get(key);
+            return data ? JSON.parse(data) : null;
+        } catch (error) {
+            logger.error('Error getting truck hold:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Remove truck hold
+     * @param {number} truckId - Truck ID
+     */
+    async removeTruckHold(truckId) {
+        try {
+            const key = `hold:truck:${truckId}`;
+            await this.client.del(key);
+            logger.info(`Hold removed for truck ${truckId}`);
+        } catch (error) {
+            logger.error('Error removing truck hold:', error);
+        }
+    }
+
+    /**
+     * Get all active holds
+     * @returns {Promise<Array>} - Array of active holds with truck IDs
+     */
+    async getAllActiveHolds() {
+        try {
+            const keys = await this.client.keys('hold:truck:*');
+            const holds = [];
+            
+            for (const key of keys) {
+                const data = await this.client.get(key);
+                if (data) {
+                    const truckId = key.split(':')[2];
+                    holds.push({
+                        truckId: parseInt(truckId),
+                        ...JSON.parse(data)
+                    });
+                }
+            }
+            
+            return holds;
+        } catch (error) {
+            logger.error('Error getting all active holds:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Setup Redis key expiration events
+     */
+    async setupKeyExpirationEvents() {
+        try {
+            // Налаштування Redis для сповіщень про закінчення ключів
+            await this.client.config('SET', 'notify-keyspace-events', 'Ex');
+            
+            // Підписка на події закінчення ключів
+            this.subscriber.on('message', (channel, message) => {
+                // Формат каналу: __keyevent@0__:expired
+                if (channel.includes(':expired')) {
+                    this.handleKeyExpiration(message);
+                }
+            });
+            
+            // Підписка на канал закінчення ключів
+            await this.subscriber.subscribe('__keyevent@0__:expired');
+            logger.info('Subscribed to Redis key expiration events');
+        } catch (error) {
+            logger.error('Error setting up key expiration events:', error);
+        }
+    }
+    
+    /**
+     * Handle key expiration event
+     * @param {string} key - Expired key
+     */
+    handleKeyExpiration(key) {
+        try {
+            // Перевірка, чи це ключ hold
+            if (key.startsWith('hold:truck:')) {
+                const truckId = key.split(':')[2];
+                logger.info(`Hold expired for truck ${truckId} (via key expiration event)`);
+                
+                // Викликаємо всі зареєстровані обробники для закінчення hold
+                if (this.keyExpirationHandlers.has('hold-expired')) {
+                    const handlers = this.keyExpirationHandlers.get('hold-expired');
+                    handlers.forEach(handler => {
+                        handler({
+                            truckId: parseInt(truckId),
+                            expiredAt: new Date().toISOString()
+                        });
+                    });
+                }
+            }
+        } catch (error) {
+            logger.error('Error handling key expiration:', error);
+        }
+    }
+    
+    /**
+     * Register handler for hold expiration events
+     * @param {Function} handler - Function to call when a hold expires
+     */
+    onHoldExpired(handler) {
+        if (!this.keyExpirationHandlers.has('hold-expired')) {
+            this.keyExpirationHandlers.set('hold-expired', []);
+        }
+        this.keyExpirationHandlers.get('hold-expired').push(handler);
+        logger.info('Registered new handler for hold expiration events');
+    }
+    
+    /**
      * Close Redis connection
      */
     async close() {
         if (this.client) {
             await this.client.quit();
-            logger.info('Redis connection closed');
+            logger.info('Redis main client closed');
+        }
+        
+        if (this.subscriber) {
+            await this.subscriber.quit();
+            logger.info('Redis subscriber client closed');
         }
     }
 }

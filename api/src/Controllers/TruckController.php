@@ -48,10 +48,6 @@ class TruckController
                 $currentUser = Auth::getCurrentUser();
                 $currentUserId = $currentUser ? $currentUser->id : null;
 
-                // Check if phone numbers should be hidden
-                $shouldHidePhones = $row['hold_status'] === 'active' &&
-                                  $row['hold_dispatcher_id'] != $currentUserId;
-
                 // Convert UTC columns to App TZ for presentation
                 $convertOut = function ($value) {
                     if ($value === null || $value === '') {
@@ -72,8 +68,8 @@ class TruckController
                     // IMPORTANT: WhenWillBeThere must be shown/used exactly as stored (no conversion)
                     'arrival_time' => $row['WhenWillBeThere'],
                     'driver_name' => $row['DriverName'],
-                    'contactphone' => $shouldHidePhones ? '***' : $row['contactphone'],
-                    'cell_phone' => $shouldHidePhones ? '***' : $row['CellPhone'],
+                    'contactphone' => $row['contactphone'],
+                    'cell_phone' => $row['CellPhone'],
                     'email' => $row['mail'],
                     'city_state_zip' => $row['CityStateZip'],
                     'dimensions_payload' => $row['Dimensions'],
@@ -446,16 +442,12 @@ class TruckController
                 $currentUser = Auth::getCurrentUser();
                 $currentUserId = $currentUser ? $currentUser->id : null;
 
-                // Check if phone numbers should be hidden
-                $shouldHidePhones = $row['hold_status'] === 'active' &&
-                                  $row['hold_dispatcher_id'] != $currentUserId;
-
                 return [
                     'id' => $row['ID'],
                     'truck_no' => $row['TruckNumber'],
                     'status' => $row['Status'],
                     'driver_name' => $row['DriverName'],
-                    'cell_phone' => $shouldHidePhones ? '***' : $row['CellPhone'],
+                    'cell_phone' => $row['CellPhone'],
                     'city_state_zip' => $row['CityStateZip'],
                     'arrival_time' => $row['WhenWillBeThere'],
                     'loads_mark' => $row['rate'] ?? '',
@@ -889,10 +881,19 @@ class TruckController
 
             ActivityLogger::log('truck_hold_placed', [
                 'truck_id' => $truckId,
-                'truck_number' => $truckNumber,
                 'dispatcher_id' => $dispatcherId,
                 'dispatcher_name' => $dispatcherName
             ]);
+        
+            // Only send webhook if not coming from Socket.io server
+            if (!isset($_SERVER['HTTP_X_SOCKET_REQUEST'])) {
+                self::notifySocketServer('hold_placed', [
+                    'truckId' => (int)$truckId,
+                    'dispatcherId' => (int)$dispatcherId,
+                    'dispatcherName' => $dispatcherName,
+                    'startedAt' => \App\Core\TimeService::nowUtc()->format('c')
+                ]);
+            }
 
             self::sendResponse(['success' => true, 'message' => 'Hold placed successfully.']);
         } catch (PDOException $e) {
@@ -906,6 +907,7 @@ class TruckController
      */
     public static function removeHold($truckId, $dispatcherId)
     {
+
         try {
             $pdo = Database::getConnection();
 
@@ -958,10 +960,17 @@ class TruckController
 
             ActivityLogger::log('truck_hold_removed', [
                 'truck_id' => $truckId,
-                'truck_number' => $truckNumber,
-                'dispatcher_id' => $dispatcherId,
-                'dispatcher_name' => $truckData['hold_dispatcher_name']
+                'dispatcher_id' => $dispatcherId
             ]);
+            
+            // Only send webhook if not coming from Socket.io server
+            if (!isset($_SERVER['HTTP_X_SOCKET_REQUEST'])) {
+                self::notifySocketServer('hold_removed', [
+                    'truckId' => (int)$truckId,
+                    'dispatcherId' => (int)$dispatcherId,
+                    'removedAt' => \App\Core\TimeService::nowUtc()->format('c')
+                ]);
+            }
 
             self::sendResponse(['success' => true, 'message' => 'Hold removed successfully.']);
         } catch (PDOException $e) {
@@ -997,6 +1006,73 @@ class TruckController
         } catch (PDOException $e) {
             Logger::error('Failed to cleanup expired holds', ['error' => $e->getMessage()]);
             self::sendResponse(['success' => false, 'message' => 'Database error during cleanup.'], 500);
+        }
+    }
+
+    /**
+     * Notify Socket.io server about hold changes
+     */
+    private static function notifySocketServer($event, $data)
+    {
+        try {
+            $socketUrl = getenv('OFFERS_SERVER_URL');
+            $webhookSecret = getenv('OFFERS_WEBHOOK_SECRET');
+            
+            if (empty($socketUrl) || empty($webhookSecret)) {
+                Logger::warning('Socket.io notification skipped: OFFERS_SERVER_URL or OFFERS_WEBHOOK_SECRET not set', [
+                    'event' => $event,
+                    'data' => $data
+                ]);
+                return;
+            }
+            
+            $url = rtrim($socketUrl, '/') . '/api/webhook';
+            $postData = json_encode([
+                'event' => $event,
+                'data' => $data
+            ]);
+            
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'X-Webhook-Secret: ' . $webhookSecret,
+                'X-Socket-Request: true'
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5); // 5 second timeout
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // For development
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            
+            if (curl_errno($ch)) {
+                throw new \Exception('cURL error: ' . curl_error($ch));
+            }
+            
+            curl_close($ch);
+            
+            if ($httpCode === 200) {
+                Logger::info("Socket.io notification sent: {$event}", [
+                    'url' => $url,
+                    'data' => $data,
+                    'response' => $response
+                ]);
+            } else {
+                Logger::warning("Socket.io notification failed: {$event}, HTTP {$httpCode}", [
+                    'url' => $url,
+                    'data' => $data,
+                    'response' => $response
+                ]);
+            }
+        } catch (\Exception $e) {
+            Logger::error('Failed to notify Socket.io server', [
+                'event' => $event,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
         }
     }
 
@@ -1260,6 +1336,78 @@ class TruckController
                 'truck_id' => $truckId
             ]);
             self::sendResponse(['success' => false, 'message' => 'Database error.'], 500);
+        }
+    }
+
+    /**
+     * Expire hold from a truck automatically (called by Redis key expiration)
+     */
+    public static function expireHold($truckId)
+    {
+        try {
+            $pdo = Database::getConnection();
+
+            // Verify truck exists
+            $truckStmt = $pdo->prepare("SELECT TruckNumber, hold_status FROM Trucks WHERE ID = :ID");
+            $truckStmt->execute(['ID' => $truckId]);
+            $truckData = $truckStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$truckData) {
+                self::sendResponse(['success' => false, 'message' => 'Truck not found.'], 404);
+                return;
+            }
+
+            $truckNumber = $truckData['TruckNumber'] ?? 'unknown';
+            
+            // Check if truck is actually on hold
+            if ($truckData['hold_status'] !== 'active') {
+                self::sendResponse(['success' => false, 'message' => 'Truck is not on hold.'], 400);
+                return;
+            }
+
+            // Remove hold
+            $updateStmt = $pdo->prepare("
+                UPDATE Trucks 
+                SET hold_status = NULL, 
+                    hold_started_at = NULL, 
+                    hold_dispatcher_id = NULL, 
+                    hold_dispatcher_name = NULL
+                WHERE ID = :truck_id AND hold_status = 'active'
+            ");
+
+            $updateStmt->execute([
+                'truck_id' => $truckId
+            ]);
+
+            // Check if any rows were actually updated
+            if ($updateStmt->rowCount() === 0) {
+                self::sendResponse(['success' => false, 'message' => 'Failed to expire hold.'], 500);
+                return;
+            }
+
+            ActivityLogger::log('truck_hold_expired', [
+                'truck_id' => $truckId,
+                'truck_number' => $truckNumber,
+                'expired_automatically' => true
+            ]);
+            
+            Logger::info('Hold expired automatically via Redis TTL', [
+                'truck_id' => $truckId,
+                'truck_number' => $truckNumber
+            ]);
+
+            // Only send webhook if not coming from Socket.io server
+            if (!isset($_SERVER['HTTP_X_SOCKET_REQUEST'])) {
+                self::notifySocketServer('hold_expired', [
+                    'truckId' => (int)$truckId,
+                    'expiredAt' => \App\Core\TimeService::nowUtc()->format('c')
+                ]);
+            }
+
+            self::sendResponse(['success' => true, 'message' => 'Hold expired successfully.']);
+        } catch (PDOException $e) {
+            Logger::error('Failed to expire hold', ['error' => $e->getMessage(), 'truck_id' => $truckId]);
+            self::sendResponse(['success' => false, 'message' => 'Database error during hold expiration.'], 500);
         }
     }
 }

@@ -60,9 +60,11 @@ class JWTAuth {
 
             // Attach user info to socket (fallbacks for missing fields)
             socket.userId = userData.id;
-            socket.username = userData.username || userData.fullName || 'unknown';
+            socket.username = userData.username || 'unknown';
+            socket.fullName = userData.fullName || 'Unknown';
             socket.userRole = userData.role || 'user';
             socket.userType = socket.userRole === 'admin' || socket.userRole === 'dispatcher' ? 'dispatcher' : 'driver';
+            socket.token = token; // Store original token for API calls
 
             if (!socket.userId) {
                 logger.warn(`Authenticated token missing userId field (payload keys: ${Object.keys(userData).join(',')})`);

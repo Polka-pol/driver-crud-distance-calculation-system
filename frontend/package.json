@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "0.1.0",
-  "homepage": "/test10",
+  "homepage": "",
   "private": true,
   "dependencies": {
     "@turf/distance": "^7.2.0",

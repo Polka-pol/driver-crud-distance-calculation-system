@@ -23,11 +23,13 @@ import { API_BASE_URL } from './config';
 import { PermissionsProvider } from './context/PermissionsContext';
 import { getCurrentEDT, setAppTimezone, parseAppTzDateTimeToEpochMs } from './utils/timeUtils';
 import { useModalScrollLock } from './utils/modalScrollLock';
-import { SocketProvider } from './context/SocketProvider';
+import { SocketProvider, useSocket } from './context/SocketProvider';
+import HoldEventHandler from './components/HoldEventHandler';
 
-function App() {
+function AppContent() {
   const [user, setUser] = useState(getCurrentUser());
   const [isAuth, setIsAuth] = useState(isAuthenticated());
+  const { emit, isConnected, connect } = useSocket();
   
   // Additional user validation on component mount
   useEffect(() => {
@@ -97,13 +99,20 @@ function App() {
     
     setUser(userData);
     setIsAuth(true);
+    
+    // Явно ініціюємо підключення до Socket.io після успішного входу
+    setTimeout(() => {
+      console.log('Initiating Socket.io connection after successful login');
+      connect();
+    }, 500); // Невелика затримка для гарантії збереження JWT токена
   };
 
   const handleLogout = () => {
     logout();
   };
 
-  const handleManualRefresh = async () => {
+
+  const handleManualRefresh = async (preserveHolds = null) => {
     if (isRefreshing) return;
     
     try {
@@ -121,7 +130,39 @@ function App() {
         throw new Error('Failed to fetch data');
       }
       const data = await response.json();
-      setTrucks(data);
+      
+      // Зберігаємо інформацію про активні hold таймери
+      setTrucks(prevTrucks => {
+        // Використовуємо передані активні hold таймери або створюємо нові з поточних даних
+        const activeHolds = preserveHolds || {};
+        
+        // Якщо не були передані активні hold таймери, створюємо їх з поточних даних
+        if (!preserveHolds) {
+          prevTrucks.forEach(truck => {
+            if (truck.hold_status === 'active' && truck.hold_started_at) {
+              activeHolds[truck.id] = {
+                hold_status: truck.hold_status,
+                hold_started_at: truck.hold_started_at,
+                hold_dispatcher_id: truck.hold_dispatcher_id,
+                hold_dispatcher_name: truck.hold_dispatcher_name
+              };
+            }
+          });
+        }
+        
+        // Оновлюємо дані, зберігаючи інформацію про активні hold таймери
+        return data.map(newTruck => {
+          // Якщо для цього вантажівки був активний hold, зберігаємо його
+          if (activeHolds[newTruck.id]) {
+            return {
+              ...newTruck,
+              ...activeHolds[newTruck.id]
+            };
+          }
+          return newTruck;
+        });
+      });
+      
       setDistances({}); // Clear all calculated distances
       setError(null); // Clear any previous errors
       
@@ -137,40 +178,6 @@ function App() {
     }
   };
 
-  // Optimized refresh that preserves distance calculations
-  const handleHoldRefresh = async () => {
-    if (isRefreshing) return;
-    
-    try {
-      setIsRefreshing(true);
-      
-      // Clean up expired holds before fetching fresh data
-      try {
-        await apiClient(`${API_BASE_URL}/trucks/hold/cleanup`);
-      } catch (cleanupError) {
-        console.warn('Hold cleanup failed:', cleanupError.message);
-      }
-      
-      const response = await apiClient(`${API_BASE_URL}/trucks`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch data');
-      }
-      const data = await response.json();
-      setTrucks(data);
-      // NOTE: Distances are preserved - no setDistances({}) call
-      setError(null); // Clear any previous errors
-      
-      // Set updated state to show visual feedback
-      setIsUpdated(true);
-      setTimeout(() => {
-        setIsUpdated(false);
-      }, 2000); // Shorter timeout for hold operations
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
 
   useEffect(() => {
     document.title = 'Connex Transport';
@@ -194,7 +201,40 @@ function App() {
           throw new Error('Failed to fetch data');
         }
         const data = await response.json();
-        setTrucks(data);
+        
+        // При першому завантаженні просто встановлюємо дані
+        // Але при повторному завантаженні зберігаємо активні hold таймери
+        setTrucks(prevTrucks => {
+          // Якщо це перше завантаження (немає попередніх даних)
+          if (!prevTrucks || prevTrucks.length === 0) {
+            return data;
+          }
+          
+          // Зберігаємо інформацію про активні hold таймери
+          const activeHolds = {};
+          prevTrucks.forEach(truck => {
+            if (truck.hold_status === 'active' && truck.hold_started_at) {
+              activeHolds[truck.id] = {
+                hold_status: truck.hold_status,
+                hold_started_at: truck.hold_started_at,
+                hold_dispatcher_id: truck.hold_dispatcher_id,
+                hold_dispatcher_name: truck.hold_dispatcher_name
+              };
+            }
+          });
+          
+          // Оновлюємо дані, зберігаючи інформацію про активні hold таймери
+          return data.map(newTruck => {
+            // Якщо для цього вантажівки був активний hold, зберігаємо його
+            if (activeHolds[newTruck.id]) {
+              return {
+                ...newTruck,
+                ...activeHolds[newTruck.id]
+              };
+            }
+            return newTruck;
+          });
+        });
       } catch (err) {
         setError(err.message);
       } finally {
@@ -571,102 +611,54 @@ function App() {
     }
   };
 
-  // Hold functionality methods
-  const handlePlaceHold = async (truckId) => {
+  // Hold functionality methods using Socket.io
+  const handlePlaceHold = (truckId) => {
     if (!user) {
       alert('You must be logged in to place holds.');
       return;
     }
 
-    // Get user ID from different possible fields
-    const userId = user.id || user.userId || user.user_id;
+    const userId = user?.id || user?.userId || user?.user_id;
     if (!userId) {
-      console.error('User object:', user);
-      console.error('Current user from localStorage:', getCurrentUser());
-      alert('User ID not found. Please log in again.');
-      // Force logout to refresh authentication
-      logout();
+      alert('Invalid user session. Please log in again.');
       return;
     }
 
-    try {
-      const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/hold`, {
-        method: 'POST',
-        body: JSON.stringify({
-          dispatcher_id: userId,
-          dispatcher_name: user.fullName || user.full_name || user.username
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          // Refresh truck data to show updated hold status (preserve distances)
-          await handleHoldRefresh();
-        } else {
-          alert('Failed to place hold: ' + result.message);
-        }
-      } else if (response.status === 409) {
-        const result = await response.json();
-        if (result.hold_info) {
-          alert(`Truck is already on hold by ${result.hold_info.dispatcher_name}. Please refresh the page to see the current status.`);
-        } else {
-          alert('Truck is already on hold by another dispatcher. Please refresh the page to see the current status.');
-        }
-        // Refresh data to show current hold status (preserve distances)
-        await handleHoldRefresh();
-      } else {
-        throw new Error('Failed to place hold');
-      }
-    } catch (error) {
-      console.error('Error placing hold:', error);
-      alert('Failed to place hold');
+    if (!isConnected) {
+      alert('Socket connection not available. Please try again.');
+      return;
     }
+
+    // Emit Socket.io event to place hold
+    emit('place_hold', {
+      truckId: parseInt(truckId),
+      dispatcherId: parseInt(userId),
+      dispatcherName: user.full_name || user.username || 'Unknown'
+    });
   };
 
-  const handleRemoveHold = async (truckId) => {
+  const handleRemoveHold = (truckId) => {
     if (!user) {
       alert('You must be logged in to remove holds.');
       return;
     }
 
-    // Get user ID from different possible fields
-    const userId = user.id || user.userId || user.user_id;
+    const userId = user?.id || user?.userId || user?.user_id;
     if (!userId) {
-      console.error('User object:', user);
-      console.error('Current user from localStorage:', getCurrentUser());
-      alert('User ID not found. Please log in again.');
-      // Force logout to refresh authentication
-      logout();
+      alert('Invalid user session. Please log in again.');
       return;
     }
 
-    try {
-      const response = await apiClient(`${API_BASE_URL}/trucks/${truckId}/hold`, {
-        method: 'DELETE',
-        body: JSON.stringify({
-          dispatcher_id: userId
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          // Refresh truck data to show updated hold status (preserve distances)
-          await handleHoldRefresh();
-        } else {
-          alert('Failed to remove hold: ' + result.message);
-        }
-      } else if (response.status === 409) {
-        // Hold was already removed by another user, just refresh the data (preserve distances)
-        await handleHoldRefresh();
-      } else {
-        throw new Error('Failed to remove hold');
-      }
-    } catch (error) {
-      console.error('Error removing hold:', error);
-      alert('Failed to remove hold');
+    if (!isConnected) {
+      alert('Socket connection not available. Please try again.');
+      return;
     }
+
+    // Emit Socket.io event to remove hold
+    emit('remove_hold', {
+      truckId: parseInt(truckId),
+      dispatcherId: parseInt(userId)
+    });
   };
 
   const syncServerTime = async () => {
@@ -696,8 +688,24 @@ function App() {
   const handleCalculate = async () => {
     if (!searchQuery) return;
     
+    // Зберігаємо інформацію про активні hold таймери перед оновленням таблиці
+    const activeHolds = {};
+    trucks.forEach(truck => {
+      if (truck.hold_status === 'active' && truck.hold_started_at) {
+        activeHolds[truck.id] = {
+          hold_status: truck.hold_status,
+          hold_started_at: truck.hold_started_at,
+          hold_dispatcher_id: truck.hold_dispatcher_id,
+          hold_dispatcher_name: truck.hold_dispatcher_name
+        };
+      }
+    });
+    
+    // Передаємо збережені дані в handleManualRefresh
+    const preserveHolds = activeHolds;
+    
     // Refresh table data before starting calculation
-    await handleManualRefresh();
+    await handleManualRefresh(preserveHolds);
     
     setIsCalculating(true);
     setShowSlowMessage(false); // Reset on new calculation
@@ -856,7 +864,12 @@ function App() {
 
   // --- Main App Render ---
   return (
-    <SocketProvider>
+    <>
+      <HoldEventHandler 
+        trucks={trucks} 
+        setTrucks={setTrucks} 
+        user={user}
+      />
       <div className="app-bg">
         <div className="container">
           <PermissionsProvider permissions={permissions}>
@@ -1007,7 +1020,7 @@ function App() {
               currentUserId={user?.id || user?.userId || user?.user_id}
               onHoldClick={handlePlaceHold}
               onRemoveHold={handleRemoveHold}
-              onHoldExpired={handleHoldRefresh}
+              onHoldExpired={() => console.log('Hold expired - will be handled via Socket.io')}
               serverTimeOffset={serverTimeOffset}
             />
 
@@ -1092,6 +1105,14 @@ function App() {
           onOfferCreated={() => setSelectedTrucks([])}
         />
       </div>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <SocketProvider>
+      <AppContent />
     </SocketProvider>
   );
 }

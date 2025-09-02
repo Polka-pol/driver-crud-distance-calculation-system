@@ -370,7 +370,7 @@ const CreateOfferModal = ({ isOpen, onClose, selectedDrivers, pickupAddress, onO
                   onClick={calculateMiles}
                   disabled={isCalculating || !formData.pickupAddress || !formData.deliveryAddress}
                 >
-                  {isCalculating ? '⏳' : '🧮 Calculate'}
+                  {isCalculating ? '⏳' : 'Calculate'}
                 </button>
               </div>
             </div>

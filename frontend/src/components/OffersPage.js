@@ -32,7 +32,7 @@ const OffersPage = ({ onBack, user }) => {
       try { connect(); } catch (e) { /* noop */ }
     }
     // no cleanup
-  }, []);
+  }, [connect, isConnected]);
 
   // Load offers from API
   useEffect(() => {
